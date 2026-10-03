@@ -8,11 +8,11 @@
 		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.delta</groupId>
+	<groupId>br.com.delta</groupId>
 	<artifactId>delta_api_mongo</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>delta_api_mongo</name>
+	<description>API de telemetria e dados documentais da plataforma Delta</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -28,8 +28,14 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<springdoc-openapi.version>3.1.1</springdoc-openapi.version>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>me.paulschwarz</groupId>
+			<artifactId>springboot4-dotenv</artifactId>
+			<version>5.0.1</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-mongodb</artifactId>
@@ -41,6 +47,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>${springdoc-openapi.version}</version>
 		</dependency>
 
 		<dependency>
