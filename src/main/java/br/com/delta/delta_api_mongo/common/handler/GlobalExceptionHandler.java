@@ -4,6 +4,7 @@ import br.com.delta.delta_api_mongo.common.dto.ErrorResponse;
 import br.com.delta.delta_api_mongo.common.exception.ResourceAlreadyExistsException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,6 +16,14 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler({IllegalArgumentException.class, ConstraintViolationException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request.getRequestURI());
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
