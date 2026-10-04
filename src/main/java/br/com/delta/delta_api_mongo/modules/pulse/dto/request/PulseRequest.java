@@ -30,8 +30,7 @@ public record PulseRequest(
         Integer totalPulses,
 
         @NotNull
-        @Valid
-        List<@NotNull PulseItemRequest> pulses
+        List<@NotNull @Valid PulseItemRequest> pulses
 ) {
 
     public record PulseItemRequest(
