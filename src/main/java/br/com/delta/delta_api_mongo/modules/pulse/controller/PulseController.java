@@ -3,6 +3,7 @@ package br.com.delta.delta_api_mongo.modules.pulse.controller;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.request.PulseRequest;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.response.PulseResponse;
 import br.com.delta.delta_api_mongo.modules.pulse.service.PulseService;
+import br.com.delta.delta_api_mongo.modules.pulse.swagger.PulseSwagger;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -24,10 +25,11 @@ import java.time.Instant;
 @RestController
 @RequestMapping("/api/telemetry/pulses")
 @RequiredArgsConstructor
-public class PulseController {
+public class PulseController implements PulseSwagger {
 
     private final PulseService service;
 
+    @Override
     @PostMapping
     public ResponseEntity<PulseResponse> create(@Valid @RequestBody PulseRequest request) {
         PulseResponse response = service.create(request);
@@ -36,11 +38,13 @@ public class PulseController {
         return ResponseEntity.created(location).body(response);
     }
 
+    @Override
     @GetMapping("/{id}")
     public PulseResponse findById(@PathVariable("id") String id) {
         return service.findById(id);
     }
 
+    @Override
     @GetMapping
     public PagedModel<PulseResponse> findByDeviceAndPeriod(
             @RequestParam("device_id") String deviceId,

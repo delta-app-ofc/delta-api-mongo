@@ -5,7 +5,12 @@ import br.com.delta.delta_api_mongo.modules.pulse.dto.request.PulseRequest;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.response.PulseResponse;
 import br.com.delta.delta_api_mongo.modules.pulse.service.PulseService;
 import org.junit.jupiter.api.Test;
+import org.springdoc.core.configuration.SpringDocConfiguration;
+import org.springdoc.core.configuration.SpringDocPageableConfiguration;
+import org.springdoc.core.properties.SpringDocConfigProperties;
+import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PulseController.class)
+@ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocConfigProperties.class,
+        SpringDocWebMvcConfiguration.class, SpringDocPageableConfiguration.class})
 class PulseControllerTest {
 
     private static final String PATH = "/api/telemetry/pulses";
@@ -38,6 +45,20 @@ class PulseControllerTest {
 
     @MockitoBean
     private PulseService service;
+
+    @Test
+    void documentsEndpointsThroughInterface() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.summary")
+                        .value("Registrar um lote de pulsos"))
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "/{id}'].get.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].get.summary")
+                        .value("Consultar lotes por dispositivo e período"))
+                .andExpect(jsonPath("$.paths['" + PATH + "'].get.parameters[?(@.name == 'page')]")
+                        .isNotEmpty());
+    }
 
     @Test
     void createsBatchAndReturnsLocationWithSnakeCaseJson() throws Exception {
