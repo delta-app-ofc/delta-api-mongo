@@ -3,32 +3,32 @@ package br.com.delta.delta_api_mongo.common.deviceauth;
 import br.com.delta.delta_api_mongo.common.config.DeviceAuthProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.core.StreamReadFeature;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public final class SqlDeviceAuthClient {
     private static final Logger LOG = LoggerFactory.getLogger(SqlDeviceAuthClient.class);
     private final DeviceAuthProperties properties;
     private final URI endpoint;
-    private final HttpClient http;
+    private final RestClient http;
     private final JsonMapper json = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
-            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
             .build();
 
     public SqlDeviceAuthClient(DeviceAuthProperties properties) {
@@ -36,37 +36,42 @@ public final class SqlDeviceAuthClient {
         this.properties = properties;
         endpoint = URI.create(properties.sqlApiBaseUrl().toString().replaceAll("/+$", "")
                 + "/delta/internal/device-auth/validate");
-        http = HttpClient.newBuilder().connectTimeout(properties.connectTimeout())
+        var transport = HttpClient.newBuilder().connectTimeout(properties.connectTimeout())
                 .followRedirects(HttpClient.Redirect.NEVER).build();
+        var requestFactory = new JdkClientHttpRequestFactory(transport);
+        // Spring bounds the response, including reading its body.
+        requestFactory.setReadTimeout(properties.responseTimeout());
+        http = RestClient.builder().requestFactory(requestFactory).build();
     }
 
     public Optional<AuthenticatedDevice> validate(String apiKey) {
-        var request = HttpRequest.newBuilder(endpoint)
-                .timeout(properties.responseTimeout())
-                .header("Authorization", "Bearer " + properties.serviceCredential())
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .header("Cache-Control", "no-store")
-                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("api_key", apiKey))))
-                .build();
-        CompletableFuture<HttpResponse<String>> pending = http.sendAsync(request, HttpResponse.BodyHandlers.ofString());
         try {
-            // Bounds the entire response, including a stalled response body.
-            var response = pending.get(properties.responseTimeout().toMillis(), TimeUnit.MILLISECONDS);
-            if (response.statusCode() != 200) {
-                throw unavailable("http_" + response.statusCode());
-            }
-            return parse(response.body());
-        } catch (TimeoutException exception) {
-            pending.cancel(true);
-            throw unavailable("timeout");
-        } catch (InterruptedException exception) {
-            pending.cancel(true);
-            Thread.currentThread().interrupt();
-            throw unavailable("interrupted");
-        } catch (ExecutionException exception) {
-            throw unavailable(exception.getCause() instanceof HttpTimeoutException ? "timeout" : "transport");
+            return http.post().uri(endpoint)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.serviceCredential())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                    .body(json.writeValueAsString(Map.of("api_key", apiKey)))
+                    .exchange((request, response) -> {
+                        int status = response.getStatusCode().value();
+                        if (status != 200) {
+                            throw unavailable("http_" + status);
+                        }
+                        return parse(new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8));
+                    });
+        } catch (RestClientException exception) {
+            // Never retain HTTP exceptions, request data or response bodies.
+            throw unavailable(isTimeout(exception) ? "timeout" : "transport");
         }
+    }
+
+    private boolean isTimeout(Throwable exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Optional<AuthenticatedDevice> parse(String body) {
