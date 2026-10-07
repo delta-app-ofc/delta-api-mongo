@@ -2,7 +2,7 @@ package br.com.delta.delta_api_mongo.modules.pulse.controller;
 
 import br.com.delta.delta_api_mongo.common.deviceauth.AuthenticatedDevice;
 import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthInterceptor;
-import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthUnavailableException;
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthUnavailableException;
 import br.com.delta.delta_api_mongo.common.deviceauth.SqlDeviceAuthClient;
 import br.com.delta.delta_api_mongo.common.config.DeviceAuthWebConfig;
 import br.com.delta.delta_api_mongo.common.config.OpenApiConfig;

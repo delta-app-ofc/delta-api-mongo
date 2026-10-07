@@ -1,5 +1,6 @@
 package br.com.delta.delta_api_mongo.common.deviceauth;
 
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthUnavailableException;
 import br.com.delta.delta_api_mongo.common.config.DeviceAuthProperties;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;

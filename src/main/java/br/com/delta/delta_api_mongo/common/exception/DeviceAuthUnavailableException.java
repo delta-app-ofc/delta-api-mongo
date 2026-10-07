@@ -1,4 +1,4 @@
-package br.com.delta.delta_api_mongo.common.deviceauth;
+package br.com.delta.delta_api_mongo.common.exception;
 
 public class DeviceAuthUnavailableException extends RuntimeException {
     public DeviceAuthUnavailableException() {

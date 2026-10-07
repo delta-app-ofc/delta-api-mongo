@@ -1,5 +1,6 @@
 package br.com.delta.delta_api_mongo.common.deviceauth;
 
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthenticationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;

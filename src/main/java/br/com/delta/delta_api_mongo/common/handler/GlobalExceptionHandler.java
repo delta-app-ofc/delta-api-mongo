@@ -1,8 +1,8 @@
 package br.com.delta.delta_api_mongo.common.handler;
 
 import br.com.delta.delta_api_mongo.common.dto.ErrorResponse;
-import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthenticationException;
-import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthUnavailableException;
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthenticationException;
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthUnavailableException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceAlreadyExistsException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;

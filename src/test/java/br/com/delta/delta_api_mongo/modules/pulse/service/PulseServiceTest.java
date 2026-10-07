@@ -1,7 +1,7 @@
 package br.com.delta.delta_api_mongo.modules.pulse.service;
 
 import br.com.delta.delta_api_mongo.common.deviceauth.AuthenticatedDevice;
-import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthenticationException;
+import br.com.delta.delta_api_mongo.common.exception.DeviceAuthenticationException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import br.com.delta.delta_api_mongo.modules.pulse.document.PulseDocument;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.request.PulseRequest;
