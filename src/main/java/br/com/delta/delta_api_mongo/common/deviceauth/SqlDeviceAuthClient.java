@@ -12,6 +12,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
@@ -64,7 +65,7 @@ public final class SqlDeviceAuthClient {
             Thread.currentThread().interrupt();
             throw unavailable("interrupted");
         } catch (ExecutionException exception) {
-            throw unavailable("transport");
+            throw unavailable(exception.getCause() instanceof HttpTimeoutException ? "timeout" : "transport");
         }
     }
 
