@@ -1,5 +1,8 @@
 package br.com.delta.delta_api_mongo.modules.pulse.controller;
 
+import br.com.delta.delta_api_mongo.common.deviceauth.AuthenticatedDevice;
+import br.com.delta.delta_api_mongo.common.deviceauth.DeviceAuthInterceptor;
+import br.com.delta.delta_api_mongo.common.deviceauth.DeviceIngestion;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.request.PulseRequest;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.response.PulseResponse;
 import br.com.delta.delta_api_mongo.modules.pulse.service.PulseService;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,8 +35,11 @@ public class PulseController implements PulseSwagger {
 
     @Override
     @PostMapping
-    public ResponseEntity<PulseResponse> create(@Valid @RequestBody PulseRequest request) {
-        PulseResponse response = service.create(request);
+    @DeviceIngestion
+    public ResponseEntity<PulseResponse> create(
+            @Valid @RequestBody PulseRequest request,
+            @RequestAttribute(DeviceAuthInterceptor.DEVICE_ATTRIBUTE) AuthenticatedDevice device) {
+        PulseResponse response = service.create(request, device);
         var location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(response.id()).toUri();
         return ResponseEntity.created(location).body(response);
