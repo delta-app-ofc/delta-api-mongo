@@ -120,6 +120,23 @@ class PulseMongoIntegrationTest {
 
         mvc.perform(get(PATH + "/" + id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.device_id").value("ESP00321"));
+        mvc.perform(get(PATH).param("device_id", "ESP00321")
+                        .param("start", "2026-09-27T17:13:06Z")
+                        .param("end", "2026-09-27T17:13:07Z")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0]._id").value(id))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+        mvc.perform(get(PATH).param("device_id", "ESP00321")
+                        .param("start", "2026-09-27T17:13:05Z")
+                        .param("end", "2026-09-27T17:13:06Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+        mvc.perform(get(PATH).param("device_id", "ESP321")
+                        .param("start", "2026-09-27T17:13:06Z")
+                        .param("end", "2026-09-27T17:13:07Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
         assertThat(SQL_CALLS).hasValue(4);
     }
 }
