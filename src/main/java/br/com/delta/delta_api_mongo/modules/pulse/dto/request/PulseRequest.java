@@ -6,12 +6,17 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import br.com.delta.delta_api_mongo.common.devicevalidation.DeviceIdDeserializer;
 
 import java.time.Instant;
 import java.util.List;
 
 public record PulseRequest(
         @NotBlank
+        @Size(max = 100)
+        @JsonDeserialize(using = DeviceIdDeserializer.class)
         @JsonProperty("device_id")
         String deviceId,
 

@@ -9,10 +9,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class PulseMapper {
 
-    public PulseDocument toDocument(PulseRequest request, String authenticatedDeviceId) {
+    public PulseDocument toDocument(PulseRequest request, String validatedDeviceId) {
         return new PulseDocument(
                 null,
-                authenticatedDeviceId,
+                validatedDeviceId,
                 request.sentAt(),
                 request.windowMinutes(),
                 request.totalPulses(),

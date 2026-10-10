@@ -1,7 +1,7 @@
 package br.com.delta.delta_api_mongo.modules.pulse.service;
 
-import br.com.delta.delta_api_mongo.common.deviceauth.AuthenticatedDevice;
-import br.com.delta.delta_api_mongo.common.exception.DeviceAuthenticationException;
+import br.com.delta.delta_api_mongo.common.devicevalidation.SqlDeviceValidationClient;
+import br.com.delta.delta_api_mongo.common.exception.DeviceRejectedException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.request.PulseRequest;
 import br.com.delta.delta_api_mongo.modules.pulse.dto.response.PulseResponse;
@@ -26,19 +26,12 @@ public class PulseService {
 
     private final PulseRepository repository;
     private final PulseMapper mapper;
+    private final SqlDeviceValidationClient deviceValidation;
 
-    public PulseResponse create(@NotNull @Valid PulseRequest request, AuthenticatedDevice device) {
-        if (device == null) {
-            throw DeviceAuthenticationException.unauthorized();
-        }
-        if (!device.permissions().contains("telemetry:write")) {
-            throw DeviceAuthenticationException.forbidden();
-        }
-        if (!device.deviceId().equals(request.deviceId())) {
-            throw new IllegalArgumentException("device_id deve corresponder ao dispositivo autenticado.");
-        }
+    public PulseResponse create(@NotNull @Valid PulseRequest request) {
         validateBatch(request);
-        return mapper.toResponse(repository.save(mapper.toDocument(request, device.deviceId())));
+        String deviceId = deviceValidation.validate(request.deviceId()).orElseThrow(DeviceRejectedException::new);
+        return mapper.toResponse(repository.save(mapper.toDocument(request, deviceId)));
     }
 
     public PulseResponse findById(@NotBlank String id) {

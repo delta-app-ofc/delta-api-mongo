@@ -6,8 +6,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 
-@ConfigurationProperties(prefix = "delta.device-auth")
-public record DeviceAuthProperties(
+@ConfigurationProperties(prefix = "delta.device-validation")
+public record DeviceValidationProperties(
         URI sqlApiBaseUrl,
         String serviceCredential,
         Duration connectTimeout,
@@ -30,12 +30,12 @@ public record DeviceAuthProperties(
         if (connectTimeout == null || connectTimeout.isNegative() || connectTimeout.isZero()
                 || responseTimeout == null || responseTimeout.isNegative() || responseTimeout.isZero()
                 || responseTimeout.toMillis() == 0) {
-            throw new IllegalStateException("Os timeouts de autenticação devem ser positivos e finitos.");
+            throw new IllegalStateException("Os timeouts de validação devem ser positivos e finitos.");
         }
     }
 
     @Override
     public String toString() {
-        return "DeviceAuthProperties[credentials=REDACTED]";
+        return "DeviceValidationProperties[credentials=REDACTED]";
     }
 }

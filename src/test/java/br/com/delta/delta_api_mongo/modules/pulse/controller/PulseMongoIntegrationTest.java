@@ -28,20 +28,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @EnabledIfSystemProperty(named = "delta.test.live-mongo", matches = "true")
 @SpringBootTest(properties = {
         "delta.mongodb.telemetry.uri=mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=1000",
-        "delta.device-auth.service-credential=delta_svc_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "delta.device-auth.connect-timeout=1s",
-        "delta.device-auth.response-timeout=2s"
+        "delta.device-validation.service-credential=delta_svc_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "delta.device-validation.connect-timeout=1s",
+        "delta.device-validation.response-timeout=2s"
 })
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PulseMongoIntegrationTest {
     private static final String DATABASE = "delta_device_auth_test_" + UUID.randomUUID().toString().replace("-", "");
     private static final String PATH = "/api/telemetry/pulses";
-    private static final String KEY = "delta_dev_mongo-integration";
     private static final AtomicInteger SQL_CALLS = new AtomicInteger();
     private static volatile int sqlStatus = 200;
     private static volatile String sqlBody = """
-            {"valid":true,"device_id":"ESP00321","credential_id":1,"permissions":["telemetry:write"]}
+            {"valid":true,"device_id":"ESP00321"}
             """;
     private static final HttpServer SQL = startSql();
 
@@ -55,7 +54,7 @@ class PulseMongoIntegrationTest {
     private static HttpServer startSql() {
         try {
             var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            server.createContext("/delta/internal/device-auth/validate", exchange -> {
+            server.createContext("/delta/internal/devices/validate", exchange -> {
                 SQL_CALLS.incrementAndGet();
                 exchange.getRequestBody().readAllBytes();
                 byte[] bytes = sqlBody.getBytes(StandardCharsets.UTF_8);
@@ -74,7 +73,7 @@ class PulseMongoIntegrationTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("delta.mongodb.telemetry.database", () -> DATABASE);
-        registry.add("delta.device-auth.sql-api-base-url", () -> "http://127.0.0.1:" + SQL.getAddress().getPort());
+        registry.add("delta.device-validation.sql-api-base-url", () -> "http://127.0.0.1:" + SQL.getAddress().getPort());
     }
 
     @AfterAll
@@ -92,7 +91,7 @@ class PulseMongoIntegrationTest {
                  "total_pulses":1,"pulses":[
                    {"pulsed_at":"2026-09-27T17:12:36Z","ms_since_boot":1000,"delta_ms":0}]}
                 """;
-        var created = mvc.perform(post(PATH).header("Authorization", "Bearer " + KEY)
+        var created = mvc.perform(post(PATH)
                         .contentType("application/json").content(payload))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = JsonMapper.builder().build().readTree(created).path("_id").stringValue();
@@ -102,19 +101,17 @@ class PulseMongoIntegrationTest {
         assertThat(raw).isNotNull();
         assertThat(raw.getString("device_id")).isEqualTo("ESP00321");
         assertThat(raw.getList("pulses", org.bson.Document.class)).hasSize(1);
-        assertThat(raw.toJson()).doesNotContain(KEY, "delta_svc_", "api_key", "credential_id");
+        assertThat(raw.toJson()).doesNotContain("delta_svc_", "api_key", "credential_id");
 
-        mvc.perform(post(PATH).header("Authorization", "Bearer " + KEY).contentType("application/json")
+        mvc.perform(post(PATH).contentType("application/json")
                         .content(payload.replace("ESP00321", "ESP321")))
-                .andExpect(status().isBadRequest());
-        sqlBody = "{\"valid\":false}";
-        mvc.perform(post(PATH).header("Authorization", "Bearer " + KEY).contentType("application/json").content(payload))
-                .andExpect(status().isUnauthorized());
-        sqlStatus = 503;
-        mvc.perform(post(PATH).header("Authorization", "Bearer " + KEY).contentType("application/json").content(payload))
                 .andExpect(status().isServiceUnavailable());
+        sqlBody = "{\"valid\":false}";
         mvc.perform(post(PATH).contentType("application/json").content(payload))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
+        sqlStatus = 503;
+        mvc.perform(post(PATH).contentType("application/json").content(payload))
+                .andExpect(status().isServiceUnavailable());
         assertThat(collection.countDocuments()).isEqualTo(1);
         assertThat(SQL_CALLS).hasValue(4);
 
