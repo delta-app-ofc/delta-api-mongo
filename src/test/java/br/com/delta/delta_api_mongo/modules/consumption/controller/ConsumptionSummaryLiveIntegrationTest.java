@@ -43,7 +43,8 @@ class ConsumptionSummaryLiveIntegrationTest {
     private Document testWindows() {
         return new Document("device_id", DEVICE).append("$or", List.of(
                 new Document("window_started_at", Date.from(START)).append("window_finished_at", Date.from(MIDDLE)),
-                new Document("window_started_at", Date.from(MIDDLE)).append("window_finished_at", Date.from(END))));
+                new Document("window_started_at", Date.from(MIDDLE)).append("window_finished_at", Date.from(END)),
+                new Document("window_started_at", Date.from(END)).append("window_finished_at", Date.from(END.plusSeconds(300)))));
     }
 
     @AfterAll
@@ -53,7 +54,10 @@ class ConsumptionSummaryLiveIntegrationTest {
         assertThat(mongo.getCollection("consumption_summary").countDocuments(testWindows())).isZero();
     }
 
-    private URI uri(String suffix) { return URI.create("http://127.0.0.1:" + port + PATH + suffix); }
+    private URI uri(String suffix) {
+        String base = System.getProperty("delta.test.live-consumption-base-url", "http://127.0.0.1:" + port);
+        return URI.create(base.replaceAll("/+$", "") + PATH + suffix);
+    }
 
     private static String payload(String deviceId, String start, String end) {
         return """
@@ -68,6 +72,15 @@ class ConsumptionSummaryLiveIntegrationTest {
     }
 
     @Test
+    void httpEmptyPeriodQueryUsesRealMongo() throws Exception {
+        var emptyPage = http.send(HttpRequest.newBuilder(uri("?device_id=test_missing_" + UUID.randomUUID()
+                + "&start=" + START + "&end=" + END + "&size=1")).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(emptyPage.statusCode()).as(emptyPage.body()).isEqualTo(200);
+        assertThat(json.readTree(emptyPage.body()).path("page").path("totalElements").intValue()).isZero();
+        System.out.println("HTTP real: consulta de período vazio retornou 200 em " + uri(""));
+    }
+
+    @Test
     void httpIngestionValidatesRealSqlPersistsAndRejectsConcurrentDuplicates() throws Exception {
         String body = payload(DEVICE, START.toString(), MIDDLE.toString());
         var response = http.send(post(body), HttpResponse.BodyHandlers.ofString());
@@ -77,6 +90,20 @@ class ConsumptionSummaryLiveIntegrationTest {
         assertThat(response.headers().firstValue("Location")).contains(uri("/" + id).toString());
         var collection = mongo.getCollection("consumption_summary");
         assertThat(collection.countDocuments(testWindows())).isEqualTo(1);
+
+        for (String invalidBody : List.of(
+                body.replace("\"" + DEVICE + "\"", "null"),
+                body.replace("\"" + DEVICE + "\"", "\" \""),
+                body.replace("\"" + DEVICE + "\"", "\"" + "a".repeat(101) + "\""),
+                body.replace("\"device_id\":\"" + DEVICE + "\",", ""),
+                body.replace("14.4", "null"),
+                body.replace("2.88", "-1"),
+                body.replace(MIDDLE.toString(), START.toString()),
+                body.replace(MIDDLE.toString(), START.minusSeconds(1).toString()),
+                body.replace(START.toString(), "not-a-date"),
+                "{broken")) {
+            assertThat(http.send(post(invalidBody), HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(400);
+        }
         Document stored = collection.find(testWindows()).first();
         assertThat(stored).isNotNull();
         assertThat(stored.getString("device_id")).isEqualTo(DEVICE);
@@ -110,6 +137,28 @@ class ConsumptionSummaryLiveIntegrationTest {
         CompletableFuture.allOf(first, second).join();
         assertThat(List.of(first.join().statusCode(), second.join().statusCode())).containsExactlyInAnyOrder(201, 409);
         assertThat(collection.countDocuments(testWindows())).isEqualTo(2);
-        System.out.println("HTTP real: SQL ativa, gravação no Mongo, consultas, rejeições e concorrência aprovadas.");
+
+        String optionalFlow = payload(DEVICE, END.toString(), END.plusSeconds(300).toString())
+                .replace("14.4", "0").replace(",\"lpm_average\":2.88", "");
+        assertThat(http.send(post(optionalFlow), HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(201);
+        assertThat(collection.countDocuments(testWindows())).isEqualTo(3);
+        var paginated = http.send(HttpRequest.newBuilder(uri("?device_id=" + DEVICE + "&start=" + START
+                + "&end=" + END.plusSeconds(300) + "&size=1&page=0")).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(paginated.statusCode()).isEqualTo(200);
+        var paginatedJson = json.readTree(paginated.body());
+        assertThat(paginatedJson.path("page").path("totalElements").intValue()).isEqualTo(3);
+        assertThat(paginatedJson.path("content").size()).isEqualTo(1);
+        assertThat(paginatedJson.path("content").get(0).path("consumption_liters").doubleValue()).isZero();
+
+        for (String suffix : List.of("/invalid-id", "?device_id=" + DEVICE,
+                "?device_id=" + DEVICE + "&start=" + END + "&end=" + START,
+                "?device_id=" + DEVICE + "&start=" + START + "&end=" + END + "&size=101")) {
+            assertThat(http.send(HttpRequest.newBuilder(uri(suffix)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(400);
+        }
+        assertThat(http.send(HttpRequest.newBuilder(uri("/" + new org.bson.types.ObjectId().toHexString())).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(404);
+        System.out.println("HTTP real: destino=" + uri("") + "; SQL ativa, gravação no Mongo, consultas, paginação, "
+                + "consumo zero, vazão opcional, rejeições e concorrência (201/409) aprovadas.");
     }
 }
