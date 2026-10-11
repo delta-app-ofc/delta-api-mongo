@@ -15,7 +15,6 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 @EnableConfigurationProperties(TelemetryMongoProperties.class)
 @EnableMongoRepositories(
         basePackages = {
-                "br.com.delta.delta_api_mongo.modules.pulse.repository",
                 "br.com.delta.delta_api_mongo.modules.consumption.repository",
                 "br.com.delta.delta_api_mongo.modules.device_status.repository"
         },
