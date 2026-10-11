@@ -1,6 +1,8 @@
 package br.com.delta.delta_api_mongo.common.handler;
 
 import br.com.delta.delta_api_mongo.common.dto.ErrorResponse;
+import br.com.delta.delta_api_mongo.common.exception.DeviceRejectedException;
+import br.com.delta.delta_api_mongo.common.exception.DeviceValidationUnavailableException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceAlreadyExistsException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +18,18 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(DeviceRejectedException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceRejected(
+            DeviceRejectedException exception, HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN, exception.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(DeviceValidationUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleDeviceAuthUnavailable(
+            DeviceValidationUnavailableException exception, HttpServletRequest request) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request.getRequestURI());
+    }
 
     @ExceptionHandler({IllegalArgumentException.class, ConstraintViolationException.class})
     public ResponseEntity<ErrorResponse> handleInvalidRequest(
