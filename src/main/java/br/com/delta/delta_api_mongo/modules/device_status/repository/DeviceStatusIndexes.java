@@ -19,7 +19,7 @@ public class DeviceStatusIndexes {
     public synchronized void ensureCreated() {
         if (created) return;
         mongo.indexOps(DeviceStatusDocument.class).createIndex(new Index().on("device_id", Sort.Direction.ASC)
-                .unique().named("idx_device_status_device_uq"));
+                .unique().named("idx_device_id_unique"));
         created = true;
     }
 }
