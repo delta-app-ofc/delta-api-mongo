@@ -5,6 +5,10 @@ COPY pom.xml ./
 COPY src ./src
 RUN mvn -B -ntp -Dmaven.test.skip=true package
 
+# The opt-in test target runs the standard Maven suite during its build.
+FROM build AS test
+RUN mvn -B -ntp test
+
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
