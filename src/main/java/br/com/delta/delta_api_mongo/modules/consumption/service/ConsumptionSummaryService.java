@@ -1,7 +1,5 @@
 package br.com.delta.delta_api_mongo.modules.consumption.service;
 
-import br.com.delta.delta_api_mongo.common.devicevalidation.SqlDeviceValidationClient;
-import br.com.delta.delta_api_mongo.common.exception.DeviceRejectedException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceAlreadyExistsException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import br.com.delta.delta_api_mongo.modules.consumption.dto.request.ConsumptionSummaryRequest;
@@ -29,7 +27,6 @@ import java.time.Instant;
 public class ConsumptionSummaryService {
     private final ConsumptionSummaryRepository repository;
     private final ConsumptionSummaryMapper mapper;
-    private final SqlDeviceValidationClient deviceValidation;
     private final ConsumptionSummaryIndexes indexes;
 
     public ConsumptionSummaryResponse create(@NotNull @Valid ConsumptionSummaryRequest request) {
@@ -38,10 +35,9 @@ public class ConsumptionSummaryService {
                 || (request.lpmAverage() != null && !Double.isFinite(request.lpmAverage()))) {
             throw new IllegalArgumentException("Consumo e vazão devem ser valores finitos.");
         }
-        String deviceId = deviceValidation.validate(request.deviceId()).orElseThrow(DeviceRejectedException::new);
         indexes.ensureCreated();
         try {
-            return mapper.toResponse(repository.insert(mapper.toDocument(request, deviceId)));
+            return mapper.toResponse(repository.insert(mapper.toDocument(request)));
         } catch (DuplicateKeyException exception) {
             throw new ResourceAlreadyExistsException("Já existe um resumo para este dispositivo e esta janela.");
         }

@@ -1,7 +1,5 @@
 package br.com.delta.delta_api_mongo.modules.device_status.service;
 
-import br.com.delta.delta_api_mongo.common.devicevalidation.SqlDeviceValidationClient;
-import br.com.delta.delta_api_mongo.common.exception.DeviceRejectedException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
 import br.com.delta.delta_api_mongo.modules.device_status.dto.request.DeviceStatusRequest;
 import br.com.delta.delta_api_mongo.modules.device_status.dto.response.DeviceStatusResponse;
@@ -22,13 +20,11 @@ import org.springframework.validation.annotation.Validated;
 public class DeviceStatusService {
     private final DeviceStatusRepository repository;
     private final DeviceStatusMapper mapper;
-    private final SqlDeviceValidationClient deviceValidation;
     private final DeviceStatusIndexes indexes;
 
     public DeviceStatusResponse receive(@NotNull @Valid DeviceStatusRequest request) {
-        String deviceId = deviceValidation.validate(request.deviceId()).orElseThrow(DeviceRejectedException::new);
         indexes.ensureCreated();
-        return mapper.toResponse(repository.saveLatest(mapper.toDocument(request, deviceId)));
+        return mapper.toResponse(repository.saveLatest(mapper.toDocument(request)));
     }
 
     public DeviceStatusResponse findByDeviceId(@NotBlank @Size(max = 100) String deviceId) {

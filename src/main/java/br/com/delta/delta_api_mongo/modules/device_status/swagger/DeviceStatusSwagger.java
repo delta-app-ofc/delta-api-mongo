@@ -13,15 +13,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "Status do dispositivo", description = "Recebimento do hardware e consulta do último estado conhecido")
 public interface DeviceStatusSwagger {
-    @Operation(summary = "Receber status do hardware", description = "Mantém um documento por dispositivo, validado e ativo na SQL. "
+    @Operation(summary = "Receber status do hardware", description = "Mantém um documento por device_id informado, sem consultar cadastro ou situação na SQL. "
             + "O MongoDB gera _id. Pings antigos são ignorados e retornam o estado atual. "
             + "Datas iguais permitem substituir o estado. Datas têm precisão de milissegundos. "
             + "RSSI e conectividade são textos; motivo de indisponibilidade é opcional. Não exige chave do hardware.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estado atual do dispositivo", useReturnTypeSchema = true),
-            @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Dispositivo não cadastrado ou inativo", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "503", description = "Validação SQL indisponível", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     DeviceStatusResponse receive(DeviceStatusRequest request);
 

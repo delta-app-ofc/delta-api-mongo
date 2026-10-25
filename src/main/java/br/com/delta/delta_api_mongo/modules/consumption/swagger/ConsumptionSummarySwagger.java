@@ -19,17 +19,14 @@ import java.time.Instant;
 @Tag(name = "Resumo de consumo", description = "Recebimento direto do hardware e consulta de consumo por janela")
 public interface ConsumptionSummarySwagger {
     @Operation(summary = "Registrar resumo de consumo",
-            description = "device_id deve estar cadastrado e ativo na SQL. Não exige chave do hardware. "
+            description = "Valida o payload e grava o device_id informado, sem consultar cadastro ou situação na SQL. "
+                    + "Não exige token ou chave do hardware. "
                     + "A mesma janela do mesmo dispositivo não pode ser registrada duas vezes. Vazão média é opcional.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Resumo registrado", useReturnTypeSchema = true),
             @ApiResponse(responseCode = "400", description = "Dados ou janela inválidos",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Dispositivo não cadastrado ou inativo",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Janela já registrada para o dispositivo",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "503", description = "Validação SQL indisponível",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     ResponseEntity<ConsumptionSummaryResponse> create(ConsumptionSummaryRequest request);

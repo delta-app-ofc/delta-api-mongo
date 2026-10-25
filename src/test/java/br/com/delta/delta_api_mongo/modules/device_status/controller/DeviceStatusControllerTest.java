@@ -1,8 +1,6 @@
 package br.com.delta.delta_api_mongo.modules.device_status.controller;
 
-import br.com.delta.delta_api_mongo.common.devicevalidation.SqlDeviceValidationClient;
 import br.com.delta.delta_api_mongo.common.config.OpenApiConfig;
-import br.com.delta.delta_api_mongo.common.exception.DeviceValidationUnavailableException;
 import br.com.delta.delta_api_mongo.modules.device_status.document.DeviceStatusDocument;
 import br.com.delta.delta_api_mongo.modules.device_status.mapper.DeviceStatusMapper;
 import br.com.delta.delta_api_mongo.modules.device_status.repository.DeviceStatusIndexes;
@@ -40,7 +38,6 @@ class DeviceStatusControllerTest {
     @Autowired private MockMvc mvc;
     @MockitoBean private DeviceStatusRepository repository;
     @MockitoBean private DeviceStatusIndexes indexes;
-    @MockitoBean private SqlDeviceValidationClient client;
 
     private static String payload() {
         return """
@@ -56,7 +53,6 @@ class DeviceStatusControllerTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(client.validate(DEVICE)).thenReturn(Optional.of(DEVICE));
         lenient().when(repository.saveLatest(any())).thenAnswer(invocation -> {
             DeviceStatusDocument document = invocation.getArgument(0);
             document.setId(ID);
@@ -65,7 +61,7 @@ class DeviceStatusControllerTest {
     }
 
     @Test
-    void receivesHardwarePayloadAndValidatesBeforeWriting() throws Exception {
+    void receivesValidHardwarePayload() throws Exception {
         mvc.perform(post(PATH).contentType("application/json").content(payload()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$._id").value(ID.toHexString()))
                 .andExpect(jsonPath("$.device_id").value(DEVICE))
@@ -73,18 +69,16 @@ class DeviceStatusControllerTest {
                 .andExpect(jsonPath("$.wifi_signal_rssi").value("good"))
                 .andExpect(jsonPath("$.firmware_version").value("v1.2.3"))
                 .andExpect(jsonPath("$.connectivity_status").value("online"));
-        var order = inOrder(client, indexes, repository);
-        order.verify(client).validate(DEVICE);
+        var order = inOrder(indexes, repository);
         order.verify(indexes).ensureCreated();
         order.verify(repository).saveLatest(any());
     }
 
     @Test
-    void usesCanonicalDeviceIdFromSqlAndAllowsOmittedReason() throws Exception {
-        when(client.validate(DEVICE)).thenReturn(Optional.of("canonical-device"));
+    void preservesProvidedDeviceIdAndAllowsOmittedReason() throws Exception {
         mvc.perform(post(PATH).contentType("application/json")
                         .content(payload().replace(",\"unavailability_reason\":null", "")))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.device_id").value("canonical-device"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.device_id").value(DEVICE));
     }
 
     @ParameterizedTest
@@ -95,15 +89,15 @@ class DeviceStatusControllerTest {
         json.putNull(field);
         mvc.perform(post(PATH).contentType("application/json").content(mapper.writeValueAsString(json)))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"123", "true", "[]", "{}", "\"   \"", "\"\""})
-    void rejectsInvalidDeviceIdsBeforeSql(String value) throws Exception {
+    void rejectsInvalidDeviceIdsBeforeWriting(String value) throws Exception {
         mvc.perform(post(PATH).contentType("application/json").content(payload().replace("\"" + DEVICE + "\"", value)))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
@@ -114,29 +108,23 @@ class DeviceStatusControllerTest {
                 payload().replace("\"unavailability_reason\":null", "\"unavailability_reason\":\"" + "x".repeat(501) + "\""))) {
             mvc.perform(post(PATH).contentType("application/json").content(body)).andExpect(status().isBadRequest());
         }
-        verifyNoInteractions(client, indexes, repository);
-    }
-
-    @Test
-    void rejectedDeviceCannotWrite() throws Exception {
-        when(client.validate(DEVICE)).thenReturn(Optional.empty());
-        mvc.perform(post(PATH).contentType("application/json").content(payload())).andExpect(status().isForbidden());
         verifyNoInteractions(indexes, repository);
     }
 
-    @Test
-    void unavailableSqlCannotWrite() throws Exception {
-        when(client.validate(DEVICE)).thenThrow(new DeviceValidationUnavailableException());
-        mvc.perform(post(PATH).contentType("application/json").content(payload())).andExpect(status().isServiceUnavailable());
-        verifyNoInteractions(indexes, repository);
+    @ParameterizedTest
+    @ValueSource(strings = {"unknown", "inactive", "Esp-MixedCase-01"})
+    void acceptsProvidedDeviceIdentityWithoutRegistryLookup(String deviceId) throws Exception {
+        mvc.perform(post(PATH).contentType("application/json").content(payload().replace(DEVICE, deviceId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.device_id").value(deviceId));
+        verify(repository).saveLatest(argThat(document -> document.getDeviceId().equals(deviceId)));
     }
 
     @Test
-    void readsLatestWithoutSqlValidation() throws Exception {
+    void readsLatestStatus() throws Exception {
         when(repository.findByDeviceId(DEVICE)).thenReturn(Optional.of(document()));
         mvc.perform(get(PATH).param("device_id", DEVICE)).andExpect(status().isOk())
                 .andExpect(jsonPath("$._id").value(ID.toHexString()));
-        verifyNoInteractions(client, indexes);
+        verifyNoInteractions(indexes);
     }
 
     @Test
@@ -149,15 +137,16 @@ class DeviceStatusControllerTest {
         mvc.perform(get(PATH)).andExpect(status().isBadRequest());
         mvc.perform(get(PATH).param("device_id", " ")).andExpect(status().isBadRequest());
         mvc.perform(get(PATH).param("device_id", "x".repeat(101))).andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
     void swaggerExposesHardwareAndReadContracts() throws Exception {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['200']").exists())
-                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['403']").exists())
-                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['503']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['403']").doesNotExist())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['503']").doesNotExist())
                 .andExpect(jsonPath("$.paths['" + PATH + "'].get.responses['404']").exists());
     }
 }

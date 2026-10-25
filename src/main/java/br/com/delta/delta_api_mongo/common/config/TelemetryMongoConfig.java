@@ -35,7 +35,8 @@ public class TelemetryMongoConfig {
         return new SimpleMongoClientDatabaseFactory(mongoClient, properties.database());
     }
 
-    @Bean(name = "telemetryMongoTemplate")
+    // Spring Data can also resolve the conventional name when creating repositories.
+    @Bean(name = {"telemetryMongoTemplate", "mongoTemplate"})
     MongoTemplate telemetryMongoTemplate(
             @Qualifier("telemetryMongoDatabaseFactory") MongoDatabaseFactory databaseFactory
     ) {

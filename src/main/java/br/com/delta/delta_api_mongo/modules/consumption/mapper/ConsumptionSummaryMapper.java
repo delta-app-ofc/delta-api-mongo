@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ConsumptionSummaryMapper {
-    public ConsumptionSummaryDocument toDocument(ConsumptionSummaryRequest request, String validatedDeviceId) {
-        return new ConsumptionSummaryDocument(null, validatedDeviceId, request.windowStartedAt(),
+    public ConsumptionSummaryDocument toDocument(ConsumptionSummaryRequest request) {
+        return new ConsumptionSummaryDocument(null, request.deviceId(), request.windowStartedAt(),
                 request.windowFinishedAt(), request.consumptionLiters(), request.lpmAverage());
     }
 
