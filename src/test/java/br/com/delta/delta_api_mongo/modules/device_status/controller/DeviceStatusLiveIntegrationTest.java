@@ -1,5 +1,6 @@
 package br.com.delta.delta_api_mongo.modules.device_status.controller;
 
+import br.com.delta.delta_api_mongo.support.TimedHttpClient;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -29,18 +29,18 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Opt-in HTTP test using real SQL and MongoDB; refuses to overwrite an existing device status. */
+/** Opt-in HTTP test using real MongoDB; refuses to overwrite an existing device status. */
 @EnabledIfSystemProperty(named = "delta.test.live-device-status", matches = "true")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "server.address=127.0.0.1")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DeviceStatusLiveIntegrationTest {
     private static final String FIRMWARE = "live-test-" + UUID.randomUUID();
-    private static final String DEVICE = System.getProperty("delta.test.live-device-status-device", "ESP32-SP-0001");
+    private static final String DEVICE = System.getProperty("delta.test.live-device-status-device", "test_status_" + UUID.randomUUID());
     private static final String PATH = "/api/telemetry/device-status";
     private static final Instant START = Instant.parse("2026-07-17T17:10:00Z");
     @LocalServerPort private int port;
     @Autowired @Qualifier("telemetryMongoTemplate") private MongoTemplate mongo;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private final TimedHttpClient http = new TimedHttpClient();
     private final JsonMapper json = JsonMapper.builder().build();
     private boolean attemptedWrite;
 
@@ -51,12 +51,14 @@ class DeviceStatusLiveIntegrationTest {
             var collection = mongo.getCollection("device_status");
             collection.deleteMany(filter);
             assertThat(collection.countDocuments(filter)).isZero();
+            System.out.println("HTTP_CLEANUP collection=device_status device_id=" + DEVICE + " remaining=0");
             System.out.println("HTTP real device_status: registros exclusivos desta execução removidos.");
         }
     }
 
     private URI uri(String suffix) {
-        return URI.create("http://127.0.0.1:" + port + PATH + suffix);
+        String base = System.getProperty("delta.test.live-device-status-base-url", "http://127.0.0.1:" + port);
+        return URI.create(base.replaceAll("/+$", "") + PATH + suffix);
     }
 
     private String query(String deviceId) {
@@ -142,12 +144,12 @@ class DeviceStatusLiveIntegrationTest {
         assertThat(stored.getString("connectivity_status")).isEqualTo("online");
         assertThat(stored.get("unavailability_reason")).isNull();
         assertThat(collection.countDocuments(filter)).isEqualTo(1);
-        System.out.println("HTTP real device_status: SQL ativa, Mongo persistido, criação concorrente, atualização, "
+        System.out.println("HTTP real device_status: Mongo persistido sem cadastro prévio, criação concorrente, atualização, "
                 + "reenvio, ping antigo, recuperação e concorrência de 8 pings aprovados.");
     }
 
     @Test
-    void realRequestsRejectInvalidPayloadsAndUnknownDevicesWithoutWriting() throws Exception {
+    void realRequestsRejectInvalidPayloadsWithoutWriting() throws Exception {
         var collection = mongo.getCollection("device_status");
         long before = collection.countDocuments();
         String body = payload(START, "online", null);
@@ -162,13 +164,12 @@ class DeviceStatusLiveIntegrationTest {
             send(post(invalid), 400);
         }
         String unknown = "test_missing_" + UUID.randomUUID();
-        send(post(body.replace(DEVICE, unknown)), 403);
         read(unknown, 404);
         send(HttpRequest.newBuilder(uri("")).GET().build(), 400);
         read(" ", 400);
         read("x".repeat(101), 400);
         assertThat(collection.countDocuments()).isEqualTo(before);
-        System.out.println("HTTP real device_status: dados inválidos (400), dispositivo desconhecido (403), "
+        System.out.println("HTTP real device_status: dados inválidos (400), "
                 + "status ausente (404) e ausência de gravação nas rejeições aprovados.");
     }
 }

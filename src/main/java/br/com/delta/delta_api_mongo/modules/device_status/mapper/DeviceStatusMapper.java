@@ -8,8 +8,8 @@ import java.time.Instant;
 
 @Component
 public class DeviceStatusMapper {
-    public DeviceStatusDocument toDocument(DeviceStatusRequest request, String validatedDeviceId) {
-        return new DeviceStatusDocument(null, validatedDeviceId, Instant.ofEpochMilli(request.lastPingAt().toEpochMilli()),
+    public DeviceStatusDocument toDocument(DeviceStatusRequest request) {
+        return new DeviceStatusDocument(null, request.deviceId(), Instant.ofEpochMilli(request.lastPingAt().toEpochMilli()),
                 request.wifiSignalRssi(), request.firmwareVersion(), request.connectivityStatus(), request.unavailabilityReason());
     }
 
