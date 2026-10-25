@@ -1,8 +1,6 @@
 package br.com.delta.delta_api_mongo.modules.consumption.controller;
 
 import br.com.delta.delta_api_mongo.common.config.OpenApiConfig;
-import br.com.delta.delta_api_mongo.common.devicevalidation.SqlDeviceValidationClient;
-import br.com.delta.delta_api_mongo.common.exception.DeviceValidationUnavailableException;
 import br.com.delta.delta_api_mongo.modules.consumption.document.ConsumptionSummaryDocument;
 import br.com.delta.delta_api_mongo.modules.consumption.mapper.ConsumptionSummaryMapper;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryIndexes;
@@ -48,7 +46,6 @@ class ConsumptionSummaryControllerTest {
     @Autowired private MockMvc mvc;
     @MockitoBean private ConsumptionSummaryRepository repository;
     @MockitoBean private ConsumptionSummaryIndexes indexes;
-    @MockitoBean private SqlDeviceValidationClient client;
 
     private static String payload() {
         return """
@@ -59,7 +56,6 @@ class ConsumptionSummaryControllerTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(client.validate(DEVICE)).thenReturn(Optional.of(DEVICE));
         lenient().when(repository.insert(any(ConsumptionSummaryDocument.class))).thenAnswer(invocation -> {
             ConsumptionSummaryDocument document = invocation.getArgument(0);
             document.setId(ID);
@@ -68,7 +64,7 @@ class ConsumptionSummaryControllerTest {
     }
 
     @Test
-    void activeDeviceCreatesWithoutHardwareCredential() throws Exception {
+    void validPayloadCreatesWithoutHardwareCredential() throws Exception {
         mvc.perform(post(PATH).contentType("application/json").content(payload()))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "http://localhost" + PATH + "/" + ID))
@@ -77,8 +73,7 @@ class ConsumptionSummaryControllerTest {
                 .andExpect(jsonPath("$.consumption_liters").value(14.4))
                 .andExpect(jsonPath("$.lpm_average").value(2.88))
                 .andExpect(jsonPath("$.api_key").doesNotExist());
-        var order = inOrder(client, indexes, repository);
-        order.verify(client).validate(DEVICE);
+        var order = inOrder(indexes, repository);
         order.verify(indexes).ensureCreated();
         order.verify(repository).insert(any(ConsumptionSummaryDocument.class));
     }
@@ -91,20 +86,11 @@ class ConsumptionSummaryControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"unknown", "inactive"})
-    void invalidDeviceCannotWrite(String deviceId) throws Exception {
-        when(client.validate(deviceId)).thenReturn(Optional.empty());
+    @ValueSource(strings = {"unknown", "inactive", "Esp-MixedCase-01"})
+    void acceptsProvidedDeviceIdentityWithoutRegistryLookup(String deviceId) throws Exception {
         mvc.perform(post(PATH).contentType("application/json").content(payload().replace(DEVICE, deviceId)))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.status").value(403));
-        verifyNoInteractions(indexes, repository);
-    }
-
-    @Test
-    void sqlFailureCannotWrite() throws Exception {
-        when(client.validate(DEVICE)).thenThrow(new DeviceValidationUnavailableException());
-        mvc.perform(post(PATH).contentType("application/json").content(payload()))
-                .andExpect(status().isServiceUnavailable());
-        verifyNoInteractions(indexes, repository);
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.device_id").value(deviceId));
+        verify(repository).insert(argThat((ConsumptionSummaryDocument document) -> document.getDeviceId().equals(deviceId)));
     }
 
     @Test
@@ -116,19 +102,19 @@ class ConsumptionSummaryControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"null", "\"\"", "\"   \"", "123", "true", "[]", "{}"})
-    void invalidDeviceIdNeverCallsSql(String value) throws Exception {
+    void invalidDeviceIdNeverWrites(String value) throws Exception {
         String body = payload().replace("\"" + DEVICE + "\"", value);
         mvc.perform(post(PATH).contentType("application/json").content(body)).andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
-    void missingOrLongDeviceIdNeverCallsSql() throws Exception {
+    void missingOrLongDeviceIdNeverWrites() throws Exception {
         for (String body : List.of(payload().replace("\"device_id\":\"" + DEVICE + "\",", ""),
                 payload().replace(DEVICE, "a".repeat(101)))) {
             mvc.perform(post(PATH).contentType("application/json").content(body)).andExpect(status().isBadRequest());
         }
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @ParameterizedTest
@@ -139,12 +125,12 @@ class ConsumptionSummaryControllerTest {
         json.putNull(field);
         mvc.perform(post(PATH).contentType("application/json").content(mapper.writeValueAsString(json)))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"negative_consumption", "negative_flow", "equal_window", "reversed_window", "invalid_date"})
-    void invalidReadingsNeverCallSql(String scenario) throws Exception {
+    void invalidReadingsNeverWrite(String scenario) throws Exception {
         String body = switch (scenario) {
             case "negative_consumption" -> payload().replace("14.4", "-1");
             case "negative_flow" -> payload().replace("2.88", "-1");
@@ -153,14 +139,23 @@ class ConsumptionSummaryControllerTest {
             default -> payload().replace("2026-10-10T17:05:00Z", "not-a-date");
         };
         mvc.perform(post(PATH).contentType("application/json").content(body)).andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
-    void readsByIdWithoutCallingSql() throws Exception {
+    void readsById() throws Exception {
         when(repository.findById(ID)).thenReturn(Optional.of(new ConsumptionSummaryDocument(ID, DEVICE, START, END, 14.4, 2.88)));
         mvc.perform(get(PATH + "/" + ID)).andExpect(status().isOk()).andExpect(jsonPath("$.device_id").value(DEVICE));
-        verifyNoInteractions(client, indexes);
+        verifyNoInteractions(indexes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"consumption_liters", "lpm_average"})
+    void rejectsNonFiniteReadingsBeforeWriting(String field) throws Exception {
+        String body = field.equals("consumption_liters")
+                ? payload().replace("14.4", "1e309") : payload().replace("2.88", "1e309");
+        mvc.perform(post(PATH).contentType("application/json").content(body)).andExpect(status().isBadRequest());
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
@@ -180,7 +175,7 @@ class ConsumptionSummaryControllerTest {
                         .param("page", "1").param("size", "10").param("sort", "consumptionLiters,asc"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0]._id").value(ID.toHexString()))
                 .andExpect(jsonPath("$.page.number").value(1)).andExpect(jsonPath("$.page.totalElements").value(11));
-        verifyNoInteractions(client, indexes);
+        verifyNoInteractions(indexes);
     }
 
     @Test
@@ -190,14 +185,16 @@ class ConsumptionSummaryControllerTest {
                 .andExpect(status().isBadRequest());
         mvc.perform(get(PATH).param("device_id", DEVICE).param("start", START.toString()).param("end", END.toString())
                         .param("size", "101")).andExpect(status().isBadRequest());
-        verifyNoInteractions(client, indexes, repository);
+        verifyNoInteractions(indexes, repository);
     }
 
     @Test
     void swaggerDescribesContractWithoutHardwareKey() throws Exception {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['201']").exists())
-                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['403']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['403']").doesNotExist())
+                .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['503']").doesNotExist())
                 .andExpect(jsonPath("$.paths['" + PATH + "'].post.responses['409']").exists())
                 .andExpect(jsonPath("$.paths['" + PATH + "'].post.security").doesNotExist());
     }
