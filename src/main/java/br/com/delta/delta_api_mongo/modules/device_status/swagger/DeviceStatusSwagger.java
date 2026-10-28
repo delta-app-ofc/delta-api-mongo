@@ -16,7 +16,8 @@ public interface DeviceStatusSwagger {
     @Operation(summary = "Receber status do hardware", description = "Mantém um documento por device_id informado, sem consultar cadastro ou situação na SQL. "
             + "O MongoDB gera _id. Pings antigos são ignorados e retornam o estado atual. "
             + "Datas iguais permitem substituir o estado. Datas têm precisão de milissegundos. "
-            + "RSSI e conectividade são textos; motivo de indisponibilidade é opcional. Não exige chave do hardware.")
+            + "RSSI e conectividade são textos; battery_level é um inteiro de 0 a 100; "
+            + "motivo de indisponibilidade é opcional. Não exige chave do hardware.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estado atual do dispositivo", useReturnTypeSchema = true),
             @ApiResponse(responseCode = "400", description = "Dados inválidos", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

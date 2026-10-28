@@ -20,7 +20,7 @@ class DeviceStatusRepositoryTest {
     private static final Instant PING = Instant.parse("2026-07-17T17:10:00Z");
 
     private DeviceStatusDocument document(Instant ping) {
-        return new DeviceStatusDocument(new ObjectId(), "ESP32-SP-0912", ping, "good", "v1.2.3", "online", null);
+        return new DeviceStatusDocument(new ObjectId(), "ESP32-SP-0912", ping, "good", "v1.2.3", "online", 45, null);
     }
 
     @Test
@@ -36,7 +36,8 @@ class DeviceStatusRepositoryTest {
         assertThat(query.getValue().getQueryObject().get("device_id")).isEqualTo(document.getDeviceId());
         assertThat(query.getValue().getQueryObject().get("last_ping_at", org.bson.Document.class).get("$lte")).isEqualTo(PING);
         assertThat(update.getValue().getUpdateObject().get("$set", org.bson.Document.class))
-                .containsEntry("unavailability_reason", null);
+                .containsEntry("unavailability_reason", null)
+                .containsEntry("battery_level", 45);
         assertThat(options.getValue().isUpsert()).isTrue();
         assertThat(options.getValue().isReturnNew()).isTrue();
     }

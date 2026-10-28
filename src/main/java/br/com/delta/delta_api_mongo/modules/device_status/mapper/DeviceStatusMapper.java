@@ -10,12 +10,14 @@ import java.time.Instant;
 public class DeviceStatusMapper {
     public DeviceStatusDocument toDocument(DeviceStatusRequest request) {
         return new DeviceStatusDocument(null, request.deviceId(), Instant.ofEpochMilli(request.lastPingAt().toEpochMilli()),
-                request.wifiSignalRssi(), request.firmwareVersion(), request.connectivityStatus(), request.unavailabilityReason());
+                request.wifiSignalRssi(), request.firmwareVersion(), request.connectivityStatus(), request.batteryLevel(),
+                request.unavailabilityReason());
     }
 
     public DeviceStatusResponse toResponse(DeviceStatusDocument document) {
         return new DeviceStatusResponse(document.getId().toHexString(), document.getDeviceId(), document.getLastPingAt(),
                 document.getWifiSignalRssi(), document.getFirmwareVersion(), document.getConnectivityStatus(),
+                document.getBatteryLevel(),
                 document.getUnavailabilityReason());
     }
 }

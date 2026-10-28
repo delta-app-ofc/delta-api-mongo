@@ -73,7 +73,7 @@ class DeviceStatusLiveIntegrationTest {
     private String payload(Instant ping, String connectivity, String reason) {
         return """
                 {"device_id":"%s","last_ping_at":"%s","wifi_signal_rssi":"good",
-                 "firmware_version":"%s","connectivity_status":"%s","unavailability_reason":%s}
+                 "firmware_version":"%s","connectivity_status":"%s","battery_level":45,"unavailability_reason":%s}
                 """.formatted(DEVICE, ping, FIRMWARE, connectivity, reason == null ? "null" : json.writeValueAsString(reason));
     }
 
@@ -108,6 +108,7 @@ class DeviceStatusLiveIntegrationTest {
         assertThat(org.bson.types.ObjectId.isValid(id)).isTrue();
         assertThat(current.path("last_ping_at").stringValue()).isEqualTo(START.plusSeconds(1).toString());
         assertThat(current.path("connectivity_status").stringValue()).isEqualTo("online");
+        assertThat(current.path("battery_level").intValue()).isEqualTo(45);
         assertThat(collection.countDocuments(filter)).isEqualTo(1);
         assertThat(collection.listIndexes().into(new ArrayList<>())).anySatisfy(index -> {
             assertThat(index.getString("name")).isEqualTo("idx_device_id_unique");
@@ -142,6 +143,7 @@ class DeviceStatusLiveIntegrationTest {
         assertThat(stored.getString("wifi_signal_rssi")).isEqualTo("good");
         assertThat(stored.getString("firmware_version")).isEqualTo(FIRMWARE);
         assertThat(stored.getString("connectivity_status")).isEqualTo("online");
+        assertThat(stored.getInteger("battery_level")).isEqualTo(45);
         assertThat(stored.get("unavailability_reason")).isNull();
         assertThat(collection.countDocuments(filter)).isEqualTo(1);
         System.out.println("HTTP real device_status: Mongo persistido sem cadastro prévio, criação concorrente, atualização, "
@@ -159,6 +161,7 @@ class DeviceStatusLiveIntegrationTest {
                 body.replace(FIRMWARE, "x".repeat(101)), body.replace("online", " "),
                 body.replace("\"device_id\":\"" + DEVICE + "\",", ""),
                 body.replace("\"last_ping_at\":\"" + START + "\"", "\"last_ping_at\":null"),
+                body.replace("\"battery_level\":45", "\"battery_level\":101"),
                 body.replace("\"unavailability_reason\":null", "\"unavailability_reason\":\"" + "x".repeat(501) + "\""),
                 "{broken")) {
             send(post(invalid), 400);
