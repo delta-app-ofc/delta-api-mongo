@@ -22,5 +22,6 @@ public class DeviceStatusDocument {
     @Field("wifi_signal_rssi") private String wifiSignalRssi;
     @Field("firmware_version") private String firmwareVersion;
     @Field("connectivity_status") private String connectivityStatus;
+    @Field("battery_level") private Integer batteryLevel;
     @Field("unavailability_reason") private String unavailabilityReason;
 }

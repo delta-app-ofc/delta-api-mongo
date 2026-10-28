@@ -10,5 +10,6 @@ public record DeviceStatusResponse(
         @JsonProperty("wifi_signal_rssi") String wifiSignalRssi,
         @JsonProperty("firmware_version") String firmwareVersion,
         @JsonProperty("connectivity_status") String connectivityStatus,
+        @JsonProperty("battery_level") Integer batteryLevel,
         @JsonProperty("unavailability_reason") String unavailabilityReason
 ) {}

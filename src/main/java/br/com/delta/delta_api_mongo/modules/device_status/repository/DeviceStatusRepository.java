@@ -32,6 +32,7 @@ public class DeviceStatusRepository {
                 .set("wifi_signal_rssi", document.getWifiSignalRssi())
                 .set("firmware_version", document.getFirmwareVersion())
                 .set("connectivity_status", document.getConnectivityStatus())
+                .set("battery_level", document.getBatteryLevel())
                 .set("unavailability_reason", document.getUnavailabilityReason());
         // The unique device index prevents stale upserts and concurrent first pings from creating duplicates.
         try {
