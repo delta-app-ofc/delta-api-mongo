@@ -43,12 +43,12 @@ class DeviceStatusControllerTest {
         return """
                 {"device_id":"ESP32-SP-0912","last_ping_at":"2026-07-17T17:10:00Z",
                  "wifi_signal_rssi":"good","firmware_version":"v1.2.3",
-                 "connectivity_status":"online","unavailability_reason":null}
+                 "connectivity_status":"online","battery_level":45,"unavailability_reason":null}
                 """;
     }
 
     private static DeviceStatusDocument document() {
-        return new DeviceStatusDocument(ID, DEVICE, PING, "good", "v1.2.3", "online", null);
+        return new DeviceStatusDocument(ID, DEVICE, PING, "good", "v1.2.3", "online", 45, null);
     }
 
     @BeforeEach
@@ -68,7 +68,8 @@ class DeviceStatusControllerTest {
                 .andExpect(jsonPath("$.last_ping_at").value(PING.toString()))
                 .andExpect(jsonPath("$.wifi_signal_rssi").value("good"))
                 .andExpect(jsonPath("$.firmware_version").value("v1.2.3"))
-                .andExpect(jsonPath("$.connectivity_status").value("online"));
+                .andExpect(jsonPath("$.connectivity_status").value("online"))
+                .andExpect(jsonPath("$.battery_level").value(45));
         var order = inOrder(indexes, repository);
         order.verify(indexes).ensureCreated();
         order.verify(repository).saveLatest(any());
@@ -82,7 +83,7 @@ class DeviceStatusControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"device_id", "last_ping_at", "wifi_signal_rssi", "firmware_version", "connectivity_status"})
+    @ValueSource(strings = {"device_id", "last_ping_at", "wifi_signal_rssi", "firmware_version", "connectivity_status", "battery_level"})
     void requiredFieldsCannotBeNull(String field) throws Exception {
         var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
         var json = (tools.jackson.databind.node.ObjectNode) mapper.readTree(payload());
@@ -112,6 +113,15 @@ class DeviceStatusControllerTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"-1", "101", "45.5", "\"45\""})
+    void rejectsInvalidBatteryLevel(String value) throws Exception {
+        mvc.perform(post(PATH).contentType("application/json")
+                        .content(payload().replace("\"battery_level\":45", "\"battery_level\":" + value)))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(indexes, repository);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"unknown", "inactive", "Esp-MixedCase-01"})
     void acceptsProvidedDeviceIdentityWithoutRegistryLookup(String deviceId) throws Exception {
         mvc.perform(post(PATH).contentType("application/json").content(payload().replace(DEVICE, deviceId)))
@@ -123,7 +133,8 @@ class DeviceStatusControllerTest {
     void readsLatestStatus() throws Exception {
         when(repository.findByDeviceId(DEVICE)).thenReturn(Optional.of(document()));
         mvc.perform(get(PATH).param("device_id", DEVICE)).andExpect(status().isOk())
-                .andExpect(jsonPath("$._id").value(ID.toHexString()));
+                .andExpect(jsonPath("$._id").value(ID.toHexString()))
+                .andExpect(jsonPath("$.battery_level").value(45));
         verifyNoInteractions(indexes);
     }
 
