@@ -40,6 +40,7 @@ jobs:
           if-no-files-found: error
           path: |
             target/classes
+            target/test-classes
             target/dependency
             target/site/jacoco
             target/surefire-reports
