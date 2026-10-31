@@ -9,7 +9,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
-        "delta.mongodb.telemetry.uri=mongodb://localhost:27017/?serverSelectionTimeoutMS=100",
+        "delta.mongodb.telemetry.uri=mongodb://127.0.0.1:27018/?serverSelectionTimeoutMS=100",
         "delta.mongodb.telemetry.database=delta_test"
 })
 class DeltaApiMongoApplicationTests {

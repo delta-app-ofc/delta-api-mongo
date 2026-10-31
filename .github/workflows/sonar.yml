@@ -1,0 +1,60 @@
+name: Validação Sonar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: sonar-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Testes e relatórios
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Executar suíte e gerar cobertura
+        run: ./mvnw -B -ntp clean verify
+      - name: Preparar dependências para análise Java
+        run: ./mvnw -B -ntp dependency:copy-dependencies -DincludeScope=test -DoutputDirectory=target/dependency
+      - name: Publicar relatórios e binários da análise
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-reports
+          if-no-files-found: error
+          path: |
+            target/classes
+            target/test-classes
+            target/dependency
+            target/site/jacoco
+            target/surefire-reports
+
+  sonar:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    needs: tests
+    uses: delta-app-ofc/.github/.github/workflows/sonar_scan.yml@52e5d0a44f39cfadd3a71de570f553156dbb64a4
+    with:
+      project_key: ${{ vars.SONAR_PROJECT_KEY || 'delta-app-ofc_delta-api-mongo' }}
+      organization: ${{ vars.SONAR_ORGANIZATION || 'delta-app-ofc' }}
+      artifact_name: sonar-reports
+      artifact_path: target
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
