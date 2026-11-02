@@ -144,4 +144,40 @@ class DeviceOwnerTest {
         resolver.resolve("DEV-1");
         assertThat(calls).hasValue(2);
     }
+
+    @Test
+    void ingestionUsesTheCachedOwnerWithoutCallingPostgresAgain() {
+        var client = mock(DeviceOwnerClient.class);
+        var owner = new DeviceOwner(10, "RESIDENCIAL", List.of(7), null);
+        when(client.find("DEV-1")).thenReturn(Optional.of(owner));
+        var resolver = new DeviceOwnerResolver(client, properties(), new MovableClock());
+
+        resolver.forIngestion("DEV-1");
+        assertThat(resolver.forIngestion("DEV-1")).contains(owner);
+
+        verify(client, times(1)).find("DEV-1");
+    }
+
+    @Test
+    void ingestionKeepsWorkingWithTheLastKnownOwnerWhenPostgresFails() {
+        var client = mock(DeviceOwnerClient.class);
+        var owner = new DeviceOwner(10, "RESIDENCIAL", List.of(7), null);
+        when(client.find("DEV-1")).thenReturn(Optional.of(owner)).thenThrow(new IllegalStateException("fora do ar"));
+        var clock = new MovableClock();
+        var resolver = new DeviceOwnerResolver(client, properties(), clock);
+        resolver.forIngestion("DEV-1");
+        clock.now = clock.now.plus(Duration.ofMinutes(45));
+
+        assertThat(resolver.forIngestion("DEV-1")).contains(owner);
+    }
+
+    @Test
+    void ingestionAnswers503WhenPostgresFailsAndTheOwnerIsUnknown() {
+        var client = mock(DeviceOwnerClient.class);
+        when(client.find("NOVO")).thenThrow(new IllegalStateException("fora do ar"));
+        var resolver = new DeviceOwnerResolver(client, properties(), new MovableClock());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> resolver.forIngestion("NOVO"))
+                .isInstanceOf(br.com.delta.delta_api_mongo.common.exception.ServiceUnavailableException.class);
+    }
 }

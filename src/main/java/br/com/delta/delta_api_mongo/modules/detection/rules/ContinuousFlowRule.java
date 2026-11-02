@@ -26,7 +26,7 @@ public class ContinuousFlowRule {
         if (recentNewestFirst.size() < needed) return Optional.empty();
         var run = recentNewestFirst.subList(0, needed);
         if (!Contiguous.isContiguous(run, properties.window().toleranceSeconds())) return Optional.empty();
-        if (run.stream().anyMatch(window -> window.liters() <= 0)) return Optional.empty();
+        if (run.stream().anyMatch(window -> window.liters() <= 0.2)) return Optional.empty();
 
         double mean = run.stream().mapToDouble(WindowReading::lpm).average().orElse(0);
         double variance = run.stream().mapToDouble(window -> Math.pow(window.lpm() - mean, 2)).average().orElse(0);

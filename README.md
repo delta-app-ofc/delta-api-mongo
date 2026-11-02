@@ -39,3 +39,10 @@ O resumo de vazamentos não inclui custo em reais. Alertas do detector usam temp
 O Gluh pode escrever `consumo_acima_esperado`, `previsao_ultrapassagem_meta`, `limite_ultrapassado`, `previsao_conta_disponivel`, `tarifa_atualizada` e `dica_personalizada`. Seus alertas usam `low` ou `medium`, com uma exceção confirmada em 02/11/2026: `limite_ultrapassado` também aceita `high`. O sistema escreve somente `tarifa_atualizada`, com `low` ou `medium`. As chaves internas devem começar com `gluh:{userId}:` ou `system:`, respectivamente.
 
 Os contratos de requisição e resposta estão no Swagger (`/swagger-ui.html`). Para verificar o código, execute `./mvnw -B -ntp verify` (PowerShell: `.\mvnw.cmd -B -ntp verify`). Os testes com serviços reais continuam opt-in; a suíte padrão não valida configuração nem implantação em produção.
+
+## Ensaio de sincronizacao e clientes
+
+O procedimento de configuracao, campos persistidos e ordem de publicacao fica no
+[handbook](https://github.com/delta-app-ofc/delta-handbook/blob/docs/deteccao-anomalias-ia/IA/sync-detector-clientes.md).
+O script `scripts/run-sync-local.ps1` sobe bancos descartaveis e testa HTTP real
+com a API Postgres; requer as branches correspondentes dos schemas e do Postgres.

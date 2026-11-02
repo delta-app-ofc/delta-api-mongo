@@ -63,7 +63,16 @@ public class AnomalyDetector {
         this.regimeTracker = new RegimeTracker(properties);
     }
 
-    public DetectionResult evaluate(ConsumptionSummaryDocument document) {
+    /** O mesmo monitor da avaliação protege a declaração de visita contra a gravação de um estado antigo. */
+    public synchronized void declareVisit(String deviceId, Instant until, Integer userId, Instant now) {
+        var state = baselines.deviceState(deviceId);
+        state.setVisitUntil(until);
+        state.setVisitUpdatedBy(userId);
+        state.setVisitUpdatedAt(now);
+        baselines.save(state);
+    }
+
+    public synchronized DetectionResult evaluate(ConsumptionSummaryDocument document) {
         WindowReading window = WindowReading.from(document);
         var evidence = new LinkedHashMap<String, Object>();
         evidence.put("config_version", properties.configVersion());
@@ -96,6 +105,7 @@ public class AnomalyDetector {
         Optional<DeviceOwner> owner = owners.resolve(window.deviceId());
         int hour = BaselineService.hourOfWeek(window.start(), properties.zone());
         UserHourBaselineDocument slot = baselines.slot(window.deviceId(), hour);
+        owner.ifPresent(found -> slot.setCohortKey(found.cohortKey()));
         List<WindowReading> recent = recentWindows(window);
 
         evidence.put("hour_of_week", hour);
@@ -267,7 +277,7 @@ public class AnomalyDetector {
             evidence.put("baseline_source", "device");
             evidence.put("baseline_samples", slot.getSamples().size());
         } else {
-            var reference = cohort.reference(hour);
+            var reference = cohort.reference(hour, slot.getCohortKey(), window.deviceId());
             if (reference.isEmpty()) {
                 evidence.put("baseline_source", "none");
                 return null;

@@ -33,6 +33,7 @@ public class ConsumptionSummaryService {
     private final ConsumptionSummaryMapper mapper;
     private final ConsumptionSummaryIndexes indexes;
     private final AnomalyDetectionService anomalyDetection;
+    private final br.com.delta.delta_api_mongo.modules.consumption.service.ConsumptionOwnershipService ownership;
 
     public ConsumptionSummaryResponse create(@NotNull @Valid ConsumptionSummaryRequest request) {
         validatePeriod(request.windowStartedAt(), request.windowFinishedAt());
@@ -41,8 +42,12 @@ public class ConsumptionSummaryService {
             throw new IllegalArgumentException("Consumo e vazão devem ser valores finitos.");
         }
         indexes.ensureCreated();
+        if (repository.existsByDeviceIdAndWindowStartedAtAndWindowFinishedAt(request.deviceId(), request.windowStartedAt(), request.windowFinishedAt())) {
+            throw new ResourceAlreadyExistsException("Já existe um resumo para este dispositivo e esta janela.");
+        }
         ConsumptionSummaryDocument inserted;
         var document = mapper.toDocument(request);
+        ownership.enrich(document);
         anomalyDetection.prepare(document);
         try {
             inserted = repository.insert(document);

@@ -1,0 +1,218 @@
+{
+  "source_repository": "delta-business-rules",
+  "source_commit": "253572e25d0dfc3e09157c551520056b3859567f",
+  "cases": [
+    {
+      "name": "normal",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T12:00:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T12:05:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T12:10:00+00:00",
+          "liters": 1.0
+        }
+      ],
+      "legacy_anomaly": false,
+      "legacy_reasons": [],
+      "java_anomaly": false,
+      "intentional_change": null
+    },
+    {
+      "name": "continuous",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T12:00:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:05:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:10:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:15:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:20:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:25:00+00:00",
+          "liters": 1.0
+        }
+      ],
+      "legacy_anomaly": true,
+      "legacy_reasons": [
+        "continuous_flow"
+      ],
+      "java_anomaly": true,
+      "intentional_change": null
+    },
+    {
+      "name": "gap_breaks_run",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T12:00:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:05:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:10:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:20:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:25:00+00:00",
+          "liters": 1.0
+        },
+        {
+          "start": "2026-07-13T12:30:00+00:00",
+          "liters": 1.0
+        }
+      ],
+      "legacy_anomaly": false,
+      "legacy_reasons": [],
+      "java_anomaly": false,
+      "intentional_change": null
+    },
+    {
+      "name": "residential_night",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T03:00:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:05:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:10:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:15:00+00:00",
+          "liters": 2.0
+        },
+        {
+          "start": "2026-07-13T03:20:00+00:00",
+          "liters": 2.0
+        },
+        {
+          "start": "2026-07-13T03:25:00+00:00",
+          "liters": 2.0
+        }
+      ],
+      "legacy_anomaly": true,
+      "legacy_reasons": [
+        "overnight_consumption"
+      ],
+      "java_anomaly": true,
+      "intentional_change": null
+    },
+    {
+      "name": "commercial_night",
+      "profile": "COMERCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T03:00:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:05:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:10:00+00:00",
+          "liters": 0.0
+        },
+        {
+          "start": "2026-07-13T03:15:00+00:00",
+          "liters": 2.0
+        },
+        {
+          "start": "2026-07-13T03:20:00+00:00",
+          "liters": 2.0
+        },
+        {
+          "start": "2026-07-13T03:25:00+00:00",
+          "liters": 2.0
+        }
+      ],
+      "legacy_anomaly": false,
+      "legacy_reasons": [],
+      "java_anomaly": false,
+      "intentional_change": null
+    },
+    {
+      "name": "sensor_noise",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T12:00:00+00:00",
+          "liters": 0.2
+        },
+        {
+          "start": "2026-07-13T12:05:00+00:00",
+          "liters": 0.2
+        },
+        {
+          "start": "2026-07-13T12:10:00+00:00",
+          "liters": 0.2
+        },
+        {
+          "start": "2026-07-13T12:15:00+00:00",
+          "liters": 0.2
+        },
+        {
+          "start": "2026-07-13T12:20:00+00:00",
+          "liters": 0.2
+        },
+        {
+          "start": "2026-07-13T12:25:00+00:00",
+          "liters": 0.2
+        }
+      ],
+      "legacy_anomaly": false,
+      "legacy_reasons": [],
+      "java_anomaly": false,
+      "intentional_change": null
+    },
+    {
+      "name": "isolated_deviation_requires_confirmation",
+      "profile": "RESIDENCIAL",
+      "windows": [
+        {
+          "start": "2026-07-13T12:00:00+00:00",
+          "liters": 100.0
+        }
+      ],
+      "legacy_anomaly": true,
+      "legacy_reasons": [
+        "baseline_deviation"
+      ],
+      "java_anomaly": false,
+      "intentional_change": "Uma janela extrema sem histórico e confirmação não dispara."
+    }
+  ]
+}

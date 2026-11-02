@@ -58,7 +58,11 @@ public class DeviceOwnerClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record OwnerPayload(Integer propertyId, String classificationGroup, List<Integer> userIds,
-                        List<ShiftPayload> shifts, List<String> operationDays) {
+                        List<ShiftPayload> shifts, List<String> operationDays, String cohortKey) {
+        OwnerPayload(Integer propertyId, String classificationGroup, List<Integer> userIds,
+                     List<ShiftPayload> shifts, List<String> operationDays) {
+            this(propertyId, classificationGroup, userIds, shifts, operationDays, null);
+        }
 
         DeviceOwner toOwner() {
             Set<DayOfWeek> days = EnumSet.noneOf(DayOfWeek.class);
@@ -67,7 +71,7 @@ public class DeviceOwnerClient {
                     .map(shift -> new BusinessSchedule.Shift(LocalTime.parse(shift.startTime()),
                             LocalTime.parse(shift.endTime()))).toList();
             return new DeviceOwner(propertyId, classificationGroup,
-                    userIds == null ? List.of() : userIds, new BusinessSchedule(parsed, days));
+                    userIds == null ? List.of() : userIds, new BusinessSchedule(parsed, days), cohortKey);
         }
     }
 
