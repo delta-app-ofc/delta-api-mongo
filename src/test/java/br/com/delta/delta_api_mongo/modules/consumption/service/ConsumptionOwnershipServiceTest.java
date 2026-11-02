@@ -10,7 +10,7 @@ class ConsumptionOwnershipServiceTest {
     @Test void usesOnlyRegistryUsersAndKeepsOneWindowForASharedProperty() {
         var client=mock(DeviceOwnerClient.class); var resolver=mock(DeviceOwnerResolver.class);
         when(client.isConfigured()).thenReturn(true);
-        when(resolver.fresh("DEV")).thenReturn(Optional.of(new DeviceOwner(9,"RESIDENCIAL",List.of(30,7,30),null)));
+        when(resolver.forIngestion("DEV")).thenReturn(Optional.of(new DeviceOwner(9,"RESIDENCIAL",List.of(30,7,30),null)));
         var window=new ConsumptionSummaryDocument();window.setDeviceId("DEV");
         new ConsumptionOwnershipService(client,resolver).enrich(window);
         assertThat(window.getUserId()).isEqualTo(7);

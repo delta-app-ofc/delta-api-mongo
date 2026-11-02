@@ -17,7 +17,7 @@ public class ConsumptionOwnershipService {
 
     public void enrich(ConsumptionSummaryDocument window) {
         if (!client.isConfigured()) throw new ServiceUnavailableException("Consulta de cadastro não configurada.");
-        var owner = owners.fresh(window.getDeviceId()).orElseThrow(() ->
+        var owner = owners.forIngestion(window.getDeviceId()).orElseThrow(() ->
                 new ResourceNotFoundException("Dispositivo nao associado ao cadastro."));
         var users = owner.userIds().stream().filter(id -> id != null && id > 0).distinct().sorted().toList();
         if (users.isEmpty() || owner.propertyId() == null) {

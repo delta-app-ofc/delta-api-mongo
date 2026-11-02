@@ -31,6 +31,7 @@ public class DeviceOwnerResolver {
     private final Duration ttl;
     private final Clock clock;
     private final Map<String, Entry> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<String, DeviceOwner> lastKnown = new LinkedHashMap<>(16, 0.75f, true);
 
     @Autowired
     public DeviceOwnerResolver(DeviceOwnerClient client, DetectionProperties properties) {
@@ -56,6 +57,32 @@ public class DeviceOwnerResolver {
             log.warn("Falha ao consultar o dono do dispositivo {}: {}", deviceId, exception.getClass().getSimpleName());
             cache(deviceId, Optional.empty(), now.plus(FAILURE_TTL));
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Dono para a ingestão do hardware: usa o cadastro em cache e, se o Postgres falhar, o último dono conhecido,
+     * para a coleta não parar quando a API de cadastro estiver dormindo. Sem nenhum dono conhecido, responde 503.
+     */
+    public synchronized Optional<DeviceOwner> forIngestion(String deviceId) {
+        Instant now = clock.instant();
+        Entry cached = cache.get(deviceId);
+        if (cached != null && cached.owner().isPresent() && now.isBefore(cached.expiresAt())) return cached.owner();
+        try {
+            Optional<DeviceOwner> owner = client.find(deviceId);
+            if (owner.isPresent()) {
+                cache(deviceId, owner, now.plus(ttl));
+                if (lastKnown.size() >= MAX_CACHE_ENTRIES && !lastKnown.containsKey(deviceId)) {
+                    lastKnown.remove(lastKnown.keySet().iterator().next());
+                }
+                lastKnown.put(deviceId, owner.get());
+            }
+            return owner;
+        } catch (RuntimeException failure) {
+            DeviceOwner known = lastKnown.get(deviceId);
+            if (known != null) return Optional.of(known);
+            throw new br.com.delta.delta_api_mongo.common.exception.ServiceUnavailableException(
+                    "Cadastro temporariamente indisponivel. Reenvie a requisicao.");
         }
     }
 
