@@ -6,6 +6,7 @@ import br.com.delta.delta_api_mongo.modules.consumption.mapper.ConsumptionSummar
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryIndexes;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryRepository;
 import br.com.delta.delta_api_mongo.modules.consumption.service.ConsumptionSummaryService;
+import br.com.delta.delta_api_mongo.modules.detection.service.AnomalyDetectionService;
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class ConsumptionSummaryControllerTest {
     @Autowired private MockMvc mvc;
     @MockitoBean private ConsumptionSummaryRepository repository;
     @MockitoBean private ConsumptionSummaryIndexes indexes;
+    @MockitoBean private AnomalyDetectionService anomalyDetection;
 
     private static String payload() {
         return """

@@ -2,7 +2,9 @@ package br.com.delta.delta_api_mongo.modules.consumption.service;
 
 import br.com.delta.delta_api_mongo.common.exception.ResourceAlreadyExistsException;
 import br.com.delta.delta_api_mongo.common.exception.ResourceNotFoundException;
+import br.com.delta.delta_api_mongo.modules.consumption.document.ConsumptionSummaryDocument;
 import br.com.delta.delta_api_mongo.modules.consumption.dto.request.ConsumptionSummaryRequest;
+import br.com.delta.delta_api_mongo.modules.detection.service.AnomalyDetectionService;
 import br.com.delta.delta_api_mongo.modules.consumption.dto.response.ConsumptionSummaryResponse;
 import br.com.delta.delta_api_mongo.modules.consumption.mapper.ConsumptionSummaryMapper;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryIndexes;
@@ -12,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 import java.time.Instant;
 
+@Slf4j
 @Service
 @Validated
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class ConsumptionSummaryService {
     private final ConsumptionSummaryRepository repository;
     private final ConsumptionSummaryMapper mapper;
     private final ConsumptionSummaryIndexes indexes;
+    private final AnomalyDetectionService anomalyDetection;
 
     public ConsumptionSummaryResponse create(@NotNull @Valid ConsumptionSummaryRequest request) {
         validatePeriod(request.windowStartedAt(), request.windowFinishedAt());
@@ -36,11 +41,20 @@ public class ConsumptionSummaryService {
             throw new IllegalArgumentException("Consumo e vazão devem ser valores finitos.");
         }
         indexes.ensureCreated();
+        ConsumptionSummaryDocument inserted;
         try {
-            return mapper.toResponse(repository.insert(mapper.toDocument(request)));
+            inserted = repository.insert(mapper.toDocument(request));
         } catch (DuplicateKeyException exception) {
+            // Janela repetida: o detector não roda, então o baseline não é atualizado duas vezes.
             throw new ResourceAlreadyExistsException("Já existe um resumo para este dispositivo e esta janela.");
         }
+        // Só detecta depois de gravar; o detector nunca derruba o POST.
+        try {
+            anomalyDetection.process(inserted);
+        } catch (RuntimeException exception) {
+            log.warn("Detector de anomalias não pôde ser acionado: {}", exception.toString());
+        }
+        return mapper.toResponse(inserted);
     }
 
     public ConsumptionSummaryResponse findById(@NotBlank String id) {

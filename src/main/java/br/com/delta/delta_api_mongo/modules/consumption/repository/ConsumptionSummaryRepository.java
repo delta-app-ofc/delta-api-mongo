@@ -7,10 +7,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import java.time.Instant;
+import java.util.List;
 
 public interface ConsumptionSummaryRepository extends MongoRepository<ConsumptionSummaryDocument, ObjectId> {
     @Query(value = "{'device_id': ?0, 'window_started_at': {'$gte': ?1, '$lt': ?2}}",
             sort = "{'window_started_at': -1, '_id': -1}")
     Page<ConsumptionSummaryDocument> findByDeviceIdAndWindowStartedAtGreaterThanEqualAndWindowStartedAtLessThanOrderByWindowStartedAtDescIdDesc(
             String deviceId, Instant start, Instant end, Pageable pageable);
+
+    // Janelas mais recentes do dispositivo até uma data (a mais nova primeiro); alimenta as regras do detector.
+    @Query(value = "{'device_id': ?0, 'window_started_at': {'$lte': ?1}}",
+            sort = "{'window_started_at': -1, '_id': -1}")
+    List<ConsumptionSummaryDocument> findRecentByDevice(String deviceId, Instant startedUntil, Pageable pageable);
 }
