@@ -136,8 +136,12 @@ class ScenarioCalibrationTest {
         simulate(home, harness, 31, 42, results);
 
         assertThat(harness.alerts).as("a visita não pode gerar alerta de vazamento, semente %d", seed)
-                .noneMatch(alert -> "vazamento_continuo".equals(alert.getAlertType()));
-        assertThat(harness.alerts).isEmpty();
+                .allSatisfy(alert -> {
+                    // no máximo o aviso informativo de mudança de padrão, e ele fecha quando a visita acaba
+                    assertThat(alert.getAlertType()).isEqualTo("mudanca_padrao");
+                    assertThat(alert.getSeverity()).isEqualTo("low");
+                    assertThat(alert.getResolvedAt()).isNotNull();
+                });
     }
 
     @Test

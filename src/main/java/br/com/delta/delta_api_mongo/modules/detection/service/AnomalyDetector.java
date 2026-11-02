@@ -34,6 +34,9 @@ import java.util.Optional;
 @ConditionalOnProperty(prefix = "delta.detection", name = "enabled", havingValue = "true")
 public class AnomalyDetector {
     static final String Z_STREAK = "z_streak";
+    static final String REGIME_ALERT = "regime_alert";
+    static final String LEAK_RECENT = "leak_recent";
+    private static final int LEAK_MEMORY_WINDOWS = 288;
     private static final int MIN_RECENT_WINDOWS = 12;
 
     private final DetectionProperties properties;
@@ -135,14 +138,23 @@ public class AnomalyDetector {
                     properties.zscore().threshold(), "consecutive_windows", streak));
         }
 
+        // Lembra por 24 h (288 janelas) que houve fluxo suspeito: uma subida de consumo nesse período é vazamento
+        // provável, não mudança de rotina.
+        boolean flowHit = reasons.stream().anyMatch(reason -> !AlertService.ROBUST_ZSCORE.equals(reason));
+        state.setCounter(LEAK_RECENT, flowHit ? LEAK_MEMORY_WINDOWS : Math.max(0, state.counter(LEAK_RECENT) - 1));
+
         // --- regime: o Page-Hinkley recebe um resíduo por hora (ver hourlyResidual) ---
         Double residual = hourlyResidual(state, slot, window, dataGap);
         var outcome = regimeTracker.update(state, residual, window.end(), dataGap);
         if (outcome.enteredShifted()) {
             boolean visitDeclared = state.getVisitUntil() != null && state.getVisitUntil().isAfter(window.end());
-            evidence.put("regime_change", visitDeclared ? "DECLARED_VISIT"
-                    : (reasons.isEmpty() ? "ROUTINE_CHANGE" : "LEAK_SUSPECT"));
+            String change = visitDeclared ? "DECLARED_VISIT"
+                    : (state.counter(LEAK_RECENT) > 0 ? "LEAK_SUSPECT" : "ROUTINE_CHANGE");
+            evidence.put("regime_change", change);
             evidence.put("regime_since", window.end().toString());
+            // Só uma subida de consumo sem outra explicação gera o alerta informativo de mudança de padrão.
+            state.setCounter(REGIME_ALERT, "ROUTINE_CHANGE".equals(change)
+                    && state.counter(RegimeTracker.DIRECTION) > 0 ? 1 : 0);
         }
         if (outcome.returned()) evidence.put("regime_change", "RETURNED_TO_NORMAL");
         if (outcome.promoted()) {
@@ -150,6 +162,12 @@ public class AnomalyDetector {
             evidence.put("regime_change", "PROMOTED_TO_BASELINE");
         }
         evidence.put("regime_state_after", state.getRegimeState());
+        if (!"SHIFTED".equals(state.getRegimeState())) state.setCounter(REGIME_ALERT, 0);
+        boolean regimeAlert = state.counter(REGIME_ALERT) == 1;
+        if (regimeAlert) {
+            ruleEvidence.put(AlertService.REGIME_SHIFT, Map.of("regime_change", "ROUTINE_CHANGE",
+                    "regime_since", String.valueOf(state.getRegimeSince())));
+        }
 
         // --- baseline: só janela normal ensina o "normal" ---
         boolean suspicious = !reasons.isEmpty() || zCandidate;
@@ -172,7 +190,10 @@ public class AnomalyDetector {
             slot.setPropertyId(found.propertyId());
             state.setPropertyId(found.propertyId());
         });
-        alerts.sync(window.deviceId(), owner, reasons, evidence, window.end(), state);
+        // O alerta de mudança de padrão não torna a janela anômala: é informativo, e a janela segue "normal".
+        var alertRules = new ArrayList<>(reasons);
+        if (regimeAlert) alertRules.add(AlertService.REGIME_SHIFT);
+        alerts.sync(window.deviceId(), owner, alertRules, evidence, window.end(), state);
         baselines.save(slot);
         baselines.save(state);
 
