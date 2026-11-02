@@ -268,6 +268,13 @@ class AlertsServiceTest {
     // ---------------- encerrar ----------------
 
     @Test
+    void internalWriterCannotResolveDetectorAlerts() {
+        assertThatThrownBy(() -> service.resolve("detector:DEV-1:continuous_flow:212"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repository, never()).findByDedupKeyAndResolvedAtIsNull(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void resolveClosesTheOpenAlertAndIsIdempotent() {
         var open = alert(212, null, null);
         when(repository.findByDedupKeyAndResolvedAtIsNull("gluh:212:x")).thenReturn(List.of(open));

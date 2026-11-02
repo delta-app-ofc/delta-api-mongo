@@ -124,6 +124,9 @@ public class AlertsService {
     }
 
     public ResolveAlertResponse resolve(String dedupKey) {
+        if (dedupKey == null || !(dedupKey.startsWith("gluh:") || dedupKey.startsWith("system:"))) {
+            throw new IllegalArgumentException("O endpoint interno encerra somente alertas gluh ou system.");
+        }
         var open = repository.findByDedupKeyAndResolvedAtIsNull(dedupKey);
         if (open.isEmpty()) return new ResolveAlertResponse(0);
         Instant now = clock.instant();

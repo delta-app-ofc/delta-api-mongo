@@ -34,7 +34,9 @@ public interface InternalAlertsSwagger {
     ResponseEntity<AlertResponse> create(CreateAlertRequest request);
 
     @Operation(summary = "Encerrar alerta pela dedup_key",
-            description = "Preenche resolved_at do alerta aberto com a chave. Idempotente: resolved = 0 se não havia aberto.")
+            description = "Aceita chaves gluh: ou system:. Preenche resolved_at do alerta aberto com a chave. "
+                    + "Idempotente: resolved = 0 se não havia aberto; alertas do detector são encerrados pelo detector.")
     @ApiResponse(responseCode = "200", description = "Quantidade de alertas encerrados")
+    @ApiResponse(responseCode = "400", description = "Chave inválida ou pertencente ao detector")
     ResolveAlertResponse resolve(ResolveAlertRequest request);
 }
