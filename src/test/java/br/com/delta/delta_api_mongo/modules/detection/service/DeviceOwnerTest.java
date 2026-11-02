@@ -18,6 +18,42 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 
 class DeviceOwnerTest {
+    @Test
+    void cacheEvictsTheLeastRecentlyUsedOwnerAndRemovesExpiredEntries() {
+        var client = mock(DeviceOwnerClient.class);
+        when(client.isConfigured()).thenReturn(true);
+        var owner = new DeviceOwner(10, "RESIDENCIAL", List.of(7), null);
+        when(client.find(org.mockito.ArgumentMatchers.anyString())).thenReturn(Optional.of(owner));
+        var clock = new MovableClock();
+        var resolver = new DeviceOwnerResolver(client, properties(), clock);
+        for (int i = 0; i < DeviceOwnerResolver.MAX_CACHE_ENTRIES; i++) resolver.resolve("DEV-" + i);
+        resolver.resolve("DEV-0"); // mantém a entrada usada recentemente
+        resolver.resolve("NEW");
+        resolver.resolve("DEV-0");
+        verify(client, times(1)).find("DEV-0");
+        resolver.resolve("DEV-1");
+        verify(client, times(2)).find("DEV-1");
+        clock.now = clock.now.plus(Duration.ofHours(2));
+        resolver.resolve("NEW");
+        @SuppressWarnings("unchecked")
+        var cache = (java.util.Map<String, ?>) org.springframework.test.util.ReflectionTestUtils.getField(resolver, "cache");
+        assertThat(cache).hasSize(1);
+    }
+
+    @Test
+    void anUnknownDeviceIsRetriedAfterTheFailureTtl() {
+        var client = mock(DeviceOwnerClient.class);
+        when(client.isConfigured()).thenReturn(true);
+        when(client.find("UNKNOWN")).thenReturn(Optional.empty());
+        var clock = new MovableClock();
+        var resolver = new DeviceOwnerResolver(client, properties(), clock);
+        resolver.resolve("UNKNOWN");
+        resolver.resolve("UNKNOWN");
+        verify(client, times(1)).find("UNKNOWN");
+        clock.now = clock.now.plus(Duration.ofMinutes(2));
+        resolver.resolve("UNKNOWN");
+        verify(client, times(2)).find("UNKNOWN");
+    }
     private static class MovableClock extends Clock {
         Instant now = Instant.parse("2026-07-13T12:00:00Z");
 
