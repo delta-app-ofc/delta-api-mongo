@@ -92,7 +92,8 @@ class ConsumptionSummaryServiceTest {
         assertThatThrownBy(() -> service.create(request(12.5, null)))
                 .isInstanceOf(ResourceAlreadyExistsException.class)
                 .hasMessageContaining("Já existe");
-        verifyNoInteractions(anomalyDetection);
+        verify(anomalyDetection).prepare(any(ConsumptionSummaryDocument.class));
+        verify(anomalyDetection, never()).process(any());
     }
 
     @Test
