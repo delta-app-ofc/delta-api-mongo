@@ -40,6 +40,8 @@ public class ConsumptionSummaryDocument {
     private String detectionError;
     @Field("detector_version")
     private String detectorVersion;
+    @Field("detection_status")
+    private String detectionStatus;
 
     public ConsumptionSummaryDocument(ObjectId id, String deviceId, Instant windowStartedAt,
                                       Instant windowFinishedAt, Double consumptionLiters, Double lpmAverage) {

@@ -7,113 +7,120 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Porta de entrada do detector para a ingestão. Garantias:
- * - nunca lança exceção: uma falha vira anomaly_detected = null + detection_error na janela;
- * - com delta.detection.enabled=false não faz nada;
- * - roda em uma única thread, fora da requisição: o POST do hardware responde sem esperar o detector e as
- *   janelas são avaliadas na ordem em que chegaram.
+ * A janela entra com detection_status=pending no mesmo insert da ingestão. Um único worker busca pendências
+ * no Mongo por ordem de término; a fila em memória contém somente um sinal de trabalho, nunca as janelas.
+ * Um restart ou sobrecarga não apaga a pendência, e o POST não aguarda espaço nem a execução do detector.
+ * Operação prevista com uma réplica do detector; não há transação distribuída entre os dois clusters.
  */
 @Service
 public class AnomalyDetectionService {
     private static final Logger log = LoggerFactory.getLogger(AnomalyDetectionService.class);
     public static final String DETECTOR_VERSION = "1";
-
+    private static final int BATCH_SIZE = 100;
     private final ObjectProvider<AnomalyDetector> detector;
     private final DetectionResultWriter writer;
     private final DetectionProperties properties;
-    private final ThreadPoolExecutor executor;
+    private final AtomicBoolean scanQueued = new AtomicBoolean();
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        var thread = new Thread(runnable, "anomaly-detector");
+        thread.setDaemon(true);
+        return thread;
+    });
 
-    @Autowired
     public AnomalyDetectionService(ObjectProvider<AnomalyDetector> detector, DetectionResultWriter writer,
                                    DetectionProperties properties) {
-        this(detector, writer, properties, 1000);
-    }
-
-    AnomalyDetectionService(ObjectProvider<AnomalyDetector> detector, DetectionResultWriter writer,
-                            DetectionProperties properties, int queueCapacity) {
         this.detector = detector;
         this.writer = writer;
         this.properties = properties;
-        this.executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(queueCapacity), runnable -> {
-            var thread = new Thread(runnable, "anomaly-detector");
-            thread.setDaemon(true);
-            return thread;
-        });
     }
 
-    /** Agenda a avaliação. Sob sobrecarga, aguarda vaga em vez de perder a janela inserida. */
-    public synchronized void process(ConsumptionSummaryDocument saved) {
-        if (!properties.enabled()) return;
-        Runnable task = () -> processNow(saved);
+    /** Marca a pendência antes do insert; sem uma segunda gravação no POST. */
+    public void prepare(ConsumptionSummaryDocument document) {
+        if (properties.enabled()) document.setDetectionStatus("pending");
+    }
+
+    /** Recupera pendências de uma execução anterior somente depois da aplicação e dos índices estarem prontos. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void start() {
+        if (properties.enabled() && started.compareAndSet(false, true)) {
+            executor.scheduleWithFixedDelay(this::scanSafely, 0, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Coalesce as notificações: milhares de POSTs geram no máximo um sinal aguardando execução. */
+    public void process(ConsumptionSummaryDocument saved) {
+        if (!properties.enabled() || !scanQueued.compareAndSet(false, true)) return;
         try {
-            executor.execute(task);
+            executor.execute(() -> {
+                try { scanSafely(); }
+                finally { scanQueued.set(false); }
+            });
         } catch (RejectedExecutionException exception) {
-            if (executor.isShutdown()) {
-                writeResult(saved, DetectionResult.notEvaluated("Detector em encerramento", Map.of()));
-                return;
-            }
-            // O monitor impede que novos produtores ultrapassem esta janela enquanto ela espera vaga.
-            // Uma interrupção do HTTP não pode descartar uma janela que já foi gravada no Mongo.
-            boolean interrupted = false;
-            try {
-                while (true) {
-                    try {
-                        executor.getQueue().put(task);
-                        break;
-                    } catch (InterruptedException interruptedException) {
-                        interrupted = true;
-                    }
-                }
-            } finally {
-                if (interrupted) Thread.currentThread().interrupt();
-            }
+            scanQueued.set(false);
+            // No encerramento a janela continua pending no banco e será retomada no próximo start.
+            log.debug("Worker encerrando; a janela {} permanece pendente no MongoDB.", saved.getId());
+        }
+    }
+
+    private void scanSafely() {
+        try { drainPending(); }
+        catch (RuntimeException exception) {
+            log.warn("Falha ao ler pendências do detector: {}", exception.getClass().getSimpleName());
+        }
+    }
+
+    /** Consulta limitada e ordenada; uma falha de escrita impede avançar para a próxima janela do lote. */
+    void drainPending() {
+        if (!properties.enabled() || detector.getIfAvailable() == null) return;
+        for (var document : writer.pending(BATCH_SIZE)) {
+            if (!processNow(document)) break;
         }
     }
 
     @PreDestroy
-    public synchronized void close() {
-        executor.shutdown();
-    }
+    public void close() { executor.shutdown(); }
 
-    /** Avalia várias janelas em ordem cronológica (mais antiga primeiro). */
     public void processAllNow(List<ConsumptionSummaryDocument> windows) {
-        windows.stream().sorted(Comparator.comparing(ConsumptionSummaryDocument::getWindowFinishedAt))
-                .forEach(this::processNow);
+        for (var document : windows.stream()
+                .sorted(Comparator.comparing(ConsumptionSummaryDocument::getWindowFinishedAt)).toList()) {
+            if (!processNow(document)) break;
+        }
     }
 
-    /** Avalia na thread atual; usado pela fila e pelos testes. */
-    public void processNow(ConsumptionSummaryDocument saved) {
+    /** Um erro de avaliação é um resultado concluído com anomaly_detected=null; erro de escrita mantém pending. */
+    public boolean processNow(ConsumptionSummaryDocument saved) {
+        if (!properties.enabled()) return true;
         var active = detector.getIfAvailable();
-        if (!properties.enabled() || active == null) return;
+        if (active == null) return true;
         DetectionResult result;
         try {
             result = active.evaluate(saved);
         } catch (RuntimeException exception) {
-            log.warn("Falha no detector (dispositivo {}): {}", saved.getDeviceId(), exception.toString());
+            log.warn("Falha no detector (dispositivo {}): {}", saved.getDeviceId(), exception.getClass().getSimpleName());
             result = DetectionResult.notEvaluated("Falha no detector: " + exception.getClass().getSimpleName(),
                     Map.of("config_version", properties.configVersion()));
         }
-        writeResult(saved, result);
-    }
-
-    private void writeResult(ConsumptionSummaryDocument saved, DetectionResult result) {
         try {
             writer.write(saved.getId(), result, DETECTOR_VERSION + "/" + properties.configVersion());
+            return true;
         } catch (RuntimeException exception) {
-            log.error("Não foi possível gravar o resultado do detector (janela {}): {}", saved.getId(),
-                    exception.toString());
+            log.error("Resultado da janela {} não foi salvo; permanece pendente: {}", saved.getId(),
+                    exception.getClass().getSimpleName());
+            return false;
         }
     }
 }

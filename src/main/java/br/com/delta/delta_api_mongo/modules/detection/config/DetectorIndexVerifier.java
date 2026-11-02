@@ -22,9 +22,12 @@ public class DetectorIndexVerifier implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DetectorIndexVerifier.class);
 
     private final MongoTemplate mongo;
+    private final MongoTemplate telemetry;
 
-    public DetectorIndexVerifier(@Qualifier("appMongoTemplate") MongoTemplate mongo) {
+    public DetectorIndexVerifier(@Qualifier("appMongoTemplate") MongoTemplate mongo,
+                                 @Qualifier("telemetryMongoTemplate") MongoTemplate telemetry) {
         this.mongo = mongo;
+        this.telemetry = telemetry;
     }
 
     @Override
@@ -48,8 +51,11 @@ public class DetectorIndexVerifier implements ApplicationRunner {
         boolean alerts = alertIndexes.stream()
                 .anyMatch(index -> index.getPartialFilterExpression() == null
                         && keys(index).equals(List.of("device_id", "rule", "resolved_at")));
-        if (!baseline || !alerts) {
-            throw new IllegalStateException("Aplique scripts/delta-app/script-indexes.js do delta-mongo-database "
+        boolean pending = baseline && alerts && telemetry.indexOps(br.com.delta.delta_api_mongo.modules.consumption.document.ConsumptionSummaryDocument.class)
+                .getIndexInfo().stream().anyMatch(index -> keys(index)
+                        .equals(List.of("detection_status", "window_finished_at", "_id")));
+        if (!baseline || !alerts || !pending) {
+            throw new IllegalStateException("Aplique scripts/delta-app/script-indexes.js e scripts/delta-telemetry/script-indexes.js do delta-mongo-database "
                     + "antes de habilitar o detector: índices obrigatórios de baseline/alertas ausentes.");
         }
     }

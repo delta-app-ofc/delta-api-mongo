@@ -42,8 +42,10 @@ public class ConsumptionSummaryService {
         }
         indexes.ensureCreated();
         ConsumptionSummaryDocument inserted;
+        var document = mapper.toDocument(request);
+        anomalyDetection.prepare(document);
         try {
-            inserted = repository.insert(mapper.toDocument(request));
+            inserted = repository.insert(document);
         } catch (DuplicateKeyException exception) {
             // Janela repetida: o detector não roda, então o baseline não é atualizado duas vezes.
             throw new ResourceAlreadyExistsException("Já existe um resumo para este dispositivo e esta janela.");

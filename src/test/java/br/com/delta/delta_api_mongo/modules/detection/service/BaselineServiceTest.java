@@ -116,6 +116,8 @@ class BaselineServiceTest {
         service.promoteFastToSlow("DEV-1");
 
         assertThat(slot.getMedian()).isEqualTo(20.0);
+        assertThat(service.hasSlowHistory(slot)).isTrue();
+        assertThat(slot.isSlowReady()).isTrue();
         assertThat(slot.getMad()).isEqualTo(3.0 / 1.4826, offset(1e-9));
         assertThat(noFast.getMedian()).isEqualTo(7.0);
         verify(repository).saveAll(any());

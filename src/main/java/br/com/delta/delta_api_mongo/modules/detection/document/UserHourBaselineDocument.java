@@ -23,6 +23,9 @@ import java.util.Map;
 @Setter
 @NoArgsConstructor
 public class UserHourBaselineDocument {
+    /** Referência lenta já consolidada pela promoção, mesmo antes de reconstruir o histórico de amostras. */
+    @Field("slow_ready")
+    private boolean slowReady;
     public static final int DEVICE_STATE_SLOT = -1;
 
     @Id

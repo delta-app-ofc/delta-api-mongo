@@ -26,41 +26,48 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 class AnomalyDetectionServiceTest {
     @Test
-    void aFullQueueWaitsForRoomAndEvaluatesEveryWindowInOrder() throws Exception {
-        var small = new AnomalyDetectionService(provider, writer, properties(), 1);
+    void savedPendingWindowsAreRecoveredByANewWorkerWithoutBlockingThePost() throws Exception {
+        var doc = window(T0);
+        service.prepare(doc);
+        assertThat(doc.getDetectionStatus()).isEqualTo("pending");
+        when(writer.pending(100)).thenReturn(List.of(doc), List.of());
         var entered = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
-        var submitted = new java.util.concurrent.CountDownLatch(1);
-        var first = window(T0);
-        var second = window(T0.plusSeconds(300));
-        var third = window(T0.plusSeconds(600));
-        when(detector.evaluate(any())).thenAnswer(invocation -> {
-            if (invocation.getArgument(0) == first) {
-                entered.countDown();
-                if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
-            }
+        when(detector.evaluate(doc)).thenAnswer(invocation -> {
+            entered.countDown();
+            if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
             return DetectionResult.notEvaluated("test", Map.of());
         });
-        var producer = new Thread(() -> { small.process(third); submitted.countDown(); });
+        var restarted = new AnomalyDetectionService(provider, writer, properties());
         try {
-            small.process(first);
+            restarted.start(); // nenhuma nova notificação: recupera o que já estava no banco
             assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
-            small.process(second);
-            producer.start();
-            assertThat(submitted.await(100, TimeUnit.MILLISECONDS)).isFalse();
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(1), () -> {
+                for (int i = 0; i < 2000; i++) restarted.process(doc);
+            });
             release.countDown();
-            assertThat(submitted.await(5, TimeUnit.SECONDS)).isTrue();
-            verify(writer, timeout(5000)).write(eq(third.getId()), any(), any());
-            var order = inOrder(detector);
-            order.verify(detector).evaluate(first);
-            order.verify(detector).evaluate(second);
-            order.verify(detector).evaluate(third);
+            verify(writer, timeout(5000)).write(eq(doc.getId()), any(), any());
         } finally {
             release.countDown();
-            producer.join(5000);
-            small.close();
+            restarted.close();
         }
     }
+
+    @Test
+    void failureToPersistTheOldestResultKeepsLaterPendingWindowsUntouched() {
+        var first = window(T0);
+        var second = window(T0.plusSeconds(300));
+        when(writer.pending(100)).thenReturn(List.of(first, second));
+        when(detector.evaluate(first)).thenReturn(DetectionResult.notEvaluated("test", Map.of()));
+        org.mockito.Mockito.doThrow(new IllegalStateException("mongo indisponível"))
+                .when(writer).write(eq(first.getId()), any(), any());
+        service.drainPending();
+        verify(detector, never()).evaluate(second);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void stopWorker() { service.close(); }
+
     private static final Instant T0 = Instant.parse("2026-07-14T18:00:00Z");
     private AnomalyDetector detector;
     private DetectionResultWriter writer;
@@ -144,6 +151,7 @@ class AnomalyDetectionServiceTest {
         var doc = window(T0);
         when(detector.evaluate(doc)).thenReturn(DetectionResult.notEvaluated("x", Map.of()));
 
+        when(writer.pending(100)).thenReturn(List.of(doc), List.of());
         service.process(doc);
 
         verify(writer, timeout(TimeUnit.SECONDS.toMillis(5))).write(eq(doc.getId()), any(), any());
