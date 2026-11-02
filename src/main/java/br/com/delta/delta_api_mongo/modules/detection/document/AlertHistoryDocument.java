@@ -20,6 +20,8 @@ public class AlertHistoryDocument {
     private ObjectId id;
     @Field("device_id")
     private String deviceId;
+    @Field("property_id")
+    private Integer propertyId;
     @Field("user_id")
     private Integer userId;
     @Field("alert_type")
@@ -28,7 +30,16 @@ public class AlertHistoryDocument {
     private Instant triggeredAt;
     @Field("resolved_at")
     private Instant resolvedAt;
+    @Field("dismissed_at")
+    private Instant dismissedAt;
     private String severity;
+    private String title;
+    private String message;
+    /** Quem gerou o alerta: detector, gluh (IA) ou system. */
+    private String source;
+    /** Chave de deduplicação: enquanto existe um alerta aberto com a mesma chave, não se cria outro. */
+    @Field("dedup_key")
+    private String dedupKey;
     private String rule;
     private Map<String, Object> evidence;
 }
