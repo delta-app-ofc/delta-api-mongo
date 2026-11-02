@@ -159,6 +159,7 @@ public class AnomalyDetector {
         if (outcome.returned()) evidence.put("regime_change", "RETURNED_TO_NORMAL");
         if (outcome.promoted()) {
             baselines.promoteFastToSlow(window.deviceId());
+            baselines.promoteSlot(slot);
             evidence.put("regime_change", "PROMOTED_TO_BASELINE");
         }
         evidence.put("regime_state_after", state.getRegimeState());

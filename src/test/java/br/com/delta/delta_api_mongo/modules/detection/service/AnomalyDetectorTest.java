@@ -13,6 +13,38 @@ import static br.com.delta.delta_api_mongo.modules.detection.DetectionTestSuppor
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AnomalyDetectorTest {
+    @Test
+    void promotionSurvivesSavingTheAlreadyLoadedSlotWithDetachedRepositoryDocuments() {
+        var repository = org.mockito.Mockito.mock(br.com.delta.delta_api_mongo.modules.detection.repository.UserHourBaselineRepository.class);
+        var service = new BaselineService(repository, properties());
+        int hour = BaselineService.hourOfWeek(T0, properties().zone());
+        var loaded = new br.com.delta.delta_api_mongo.modules.detection.document.UserHourBaselineDocument(DEVICE, hour);
+        for (int i = 0; i < 4; i++) service.acceptSlow(loaded, 5);
+        loaded.setEwmaMean(20.0);
+        loaded.setEwmaVar(9.0);
+        var detached = new br.com.delta.delta_api_mongo.modules.detection.document.UserHourBaselineDocument(DEVICE, hour);
+        detached.setEwmaMean(20.0);
+        detached.setEwmaVar(9.0);
+        org.mockito.Mockito.when(repository.findByDeviceIdAndHourOfWeek(DEVICE, hour)).thenReturn(Optional.of(loaded));
+        org.mockito.Mockito.when(repository.findByDeviceIdAndHourOfWeek(DEVICE, -1)).thenReturn(Optional.empty());
+        org.mockito.Mockito.when(repository.findByDeviceIdAndHourOfWeekGreaterThanEqual(DEVICE, 0))
+                .thenReturn(List.of(detached));
+        var consumption = org.mockito.Mockito.mock(br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryRepository.class);
+        var owners = org.mockito.Mockito.mock(DeviceOwnerResolver.class);
+        org.mockito.Mockito.when(owners.resolve(DEVICE)).thenReturn(Optional.empty());
+        var detector = new AnomalyDetector(properties(), consumption, service,
+                org.mockito.Mockito.mock(CohortBaseline.class), owners, org.mockito.Mockito.mock(AlertService.class));
+        var tracker = org.mockito.Mockito.mock(RegimeTracker.class);
+        org.mockito.Mockito.when(tracker.update(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(new RegimeTracker.Outcome(false, false, true));
+        org.springframework.test.util.ReflectionTestUtils.setField(detector, "regimeTracker", tracker);
+        var doc = new ConsumptionSummaryDocument(new ObjectId(), DEVICE, T0, T0.plusSeconds(300), 20.0, 4.0);
+        detector.evaluate(doc);
+        assertThat(loaded.getMedian()).isEqualTo(20.0);
+        assertThat(loaded.getSamples()).containsOnly(20.0);
+        org.mockito.Mockito.verify(repository).save(loaded);
+    }
     private static final String DEVICE = "DEV-1";
     private static final DeviceOwner RESIDENCE = new DeviceOwner(10, "RESIDENCIAL", List.of(7), null);
     // terça-feira 2026-07-14 15:00 local, longe da madrugada
