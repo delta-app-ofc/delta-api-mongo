@@ -12,7 +12,7 @@ $java = Join-Path $JavaHome 'bin\java.exe'
 function Invoke-Maven([string]$Repo, [string[]]$Arguments) {
     Push-Location -LiteralPath $Repo
     try {
-        & $java "-Dmaven.multiModuleProjectDirectory=$Repo" "-Dmaven.home=$MavenHome" "-Dclassworlds.conf=$MavenHome\bin\m2.conf" -classpath "$MavenHome\boot\*" org.codehaus.plexus.classworlds.launcher.Launcher -B -ntp @Arguments
+        & $java '-Xmx256m' "-Dmaven.multiModuleProjectDirectory=$Repo" "-Dmaven.home=$MavenHome" "-Dclassworlds.conf=$MavenHome\bin\m2.conf" -classpath "$MavenHome\boot\*" org.codehaus.plexus.classworlds.launcher.Launcher -B -ntp @Arguments
         if ($LASTEXITCODE -ne 0) { throw "Maven falhou em $Repo" }
     } finally { Pop-Location }
 }
@@ -41,8 +41,8 @@ try {
     $mongoPort = ((docker port $mongo 27017/tcp) -split ':')[-1]
     Invoke-Maven $apiRepo @('-DskipTests','package')
     $jar = Join-Path $apiRepo 'target\delta_api_mongo-0.0.1-SNAPSHOT.jar'
-    Invoke-Maven $PostgresRepo @('-Ddelta.test.sync=true',"-Ddelta.test.postgres-url=jdbc:postgresql://127.0.0.1:$pgPort/delta_test_sync","-Ddelta.test.mongo-uri=mongodb://127.0.0.1:$mongoPort","-Ddelta.test.mongo-jar=$jar",'-Dtest=ApiSyncPostgresIntegrationTest#synchronizesActualHttpIngestionOwnerJwtVisitAndDuplicate','test')
+    Invoke-Maven $PostgresRepo @('-DargLine=-Xmx384m','-Ddelta.test.sync=true',"-Ddelta.test.postgres-url=jdbc:postgresql://127.0.0.1:$pgPort/delta_test_sync","-Ddelta.test.mongo-uri=mongodb://127.0.0.1:$mongoPort","-Ddelta.test.mongo-jar=$jar",'-Dtest=ApiSyncPostgresIntegrationTest#synchronizesActualHttpIngestionOwnerJwtVisitAndDuplicate','test')
 } finally {
     # Somente containers cujo nome foi gerado nesta execução; nenhum volume compartilhado.
-    docker rm -f $pg $mongo *> $null
+    docker rm -f -v $pg $mongo *> $null
 }
