@@ -56,6 +56,12 @@ public class JwtVerifier {
             if (expiration == null || claims.getIssueTime() == null) return Optional.empty();
             long now = clock.millis();
             if (expiration.getTime() + config.clockSkewSeconds() * 1000L <= now) return Optional.empty();
+            // Um token assinado também precisa estar válido neste instante; nbf pode adiar seu uso.
+            long latestAllowed = now + config.clockSkewSeconds() * 1000L;
+            if (claims.getIssueTime().getTime() > latestAllowed) return Optional.empty();
+            if (claims.getNotBeforeTime() != null && claims.getNotBeforeTime().getTime() > latestAllowed) {
+                return Optional.empty();
+            }
             if (claims.getSubject() == null) return Optional.empty();
             int userId = Integer.parseInt(claims.getSubject());
             return userId > 0 ? Optional.of(userId) : Optional.empty();

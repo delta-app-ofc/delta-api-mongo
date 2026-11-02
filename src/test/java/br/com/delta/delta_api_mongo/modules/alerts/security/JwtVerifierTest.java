@@ -61,6 +61,27 @@ class JwtVerifierTest {
     }
 
     @Test
+    void tokensIssuedInTheFutureRespectTheClockSkew() throws Exception {
+        var tolerated = sign(PAIR, claims("1", "delta-api", "delta-api", NOW_MS + 120_000, NOW_MS + 30_000));
+        var future = sign(PAIR, claims("1", "delta-api", "delta-api", NOW_MS + 120_000, NOW_MS + 31_000));
+
+        assertThat(verifier(PUBLIC_PEM).verify(tolerated)).contains(1);
+        assertThat(verifier(PUBLIC_PEM).verify(future)).isEmpty();
+    }
+
+    @Test
+    void tokensCannotBeUsedBeforeTheirNotBeforeTimeBeyondTheClockSkew() throws Exception {
+        var base = claims("1", "delta-api", "delta-api", NOW_MS + 120_000, NOW_MS - 1000);
+        var tolerated = sign(PAIR, new com.nimbusds.jwt.JWTClaimsSet.Builder(base)
+                .notBeforeTime(new java.util.Date(NOW_MS + 30_000)).build());
+        var future = sign(PAIR, new com.nimbusds.jwt.JWTClaimsSet.Builder(base)
+                .notBeforeTime(new java.util.Date(NOW_MS + 31_000)).build());
+
+        assertThat(verifier(PUBLIC_PEM).verify(tolerated)).contains(1);
+        assertThat(verifier(PUBLIC_PEM).verify(future)).isEmpty();
+    }
+
+    @Test
     void theIssuerAndTheAudienceMustMatch() throws Exception {
         var wrongIssuer = sign(PAIR, claims("1", "outro", "delta-api", NOW_MS + 60_000, NOW_MS - 1000));
         var wrongAudience = sign(PAIR, claims("1", "delta-api", "outro", NOW_MS + 60_000, NOW_MS - 1000));
