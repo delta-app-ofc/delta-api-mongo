@@ -96,13 +96,18 @@ public class BaselineService {
     public void promoteFastToSlow(String deviceId) {
         List<UserHourBaselineDocument> slots = repository.findByDeviceIdAndHourOfWeekGreaterThanEqual(deviceId, 0);
         for (var slot : slots) {
-            if (slot.getEwmaMean() == null) continue;
-            double mean = slot.getEwmaMean();
-            double sigma = Math.sqrt(Math.max(slot.getEwmaVar() == null ? 0 : slot.getEwmaVar(), 0));
-            slot.setSamples(new ArrayList<>(List.of(mean)));
-            slot.setMedian(mean);
-            slot.setMad(sigma / RobustStats.MAD_TO_SIGMA);
+            promoteSlot(slot);
         }
         repository.saveAll(slots);
+    }
+
+    /** Também aplica a promoção à instância já carregada da janela, que será salva no fim da avaliação. */
+    public void promoteSlot(UserHourBaselineDocument slot) {
+        if (slot.getEwmaMean() == null) return;
+        double mean = slot.getEwmaMean();
+        double sigma = Math.sqrt(Math.max(slot.getEwmaVar() == null ? 0 : slot.getEwmaVar(), 0));
+        slot.setSamples(new ArrayList<>(List.of(mean)));
+        slot.setMedian(mean);
+        slot.setMad(sigma / RobustStats.MAD_TO_SIGMA);
     }
 }

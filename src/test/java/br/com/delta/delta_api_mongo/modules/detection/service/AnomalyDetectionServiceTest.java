@@ -25,6 +25,42 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 class AnomalyDetectionServiceTest {
+    @Test
+    void aFullQueueWaitsForRoomAndEvaluatesEveryWindowInOrder() throws Exception {
+        var small = new AnomalyDetectionService(provider, writer, properties(), 1);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var submitted = new java.util.concurrent.CountDownLatch(1);
+        var first = window(T0);
+        var second = window(T0.plusSeconds(300));
+        var third = window(T0.plusSeconds(600));
+        when(detector.evaluate(any())).thenAnswer(invocation -> {
+            if (invocation.getArgument(0) == first) {
+                entered.countDown();
+                if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
+            }
+            return DetectionResult.notEvaluated("test", Map.of());
+        });
+        var producer = new Thread(() -> { small.process(third); submitted.countDown(); });
+        try {
+            small.process(first);
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            small.process(second);
+            producer.start();
+            assertThat(submitted.await(100, TimeUnit.MILLISECONDS)).isFalse();
+            release.countDown();
+            assertThat(submitted.await(5, TimeUnit.SECONDS)).isTrue();
+            verify(writer, timeout(5000)).write(eq(third.getId()), any(), any());
+            var order = inOrder(detector);
+            order.verify(detector).evaluate(first);
+            order.verify(detector).evaluate(second);
+            order.verify(detector).evaluate(third);
+        } finally {
+            release.countDown();
+            producer.join(5000);
+            small.close();
+        }
+    }
     private static final Instant T0 = Instant.parse("2026-07-14T18:00:00Z");
     private AnomalyDetector detector;
     private DetectionResultWriter writer;

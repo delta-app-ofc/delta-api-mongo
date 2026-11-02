@@ -3,9 +3,11 @@ package br.com.delta.delta_api_mongo.modules.detection.service;
 import br.com.delta.delta_api_mongo.modules.consumption.document.ConsumptionSummaryDocument;
 import br.com.delta.delta_api_mongo.modules.detection.config.DetectionProperties;
 import br.com.delta.delta_api_mongo.modules.detection.model.DetectionResult;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
@@ -30,29 +32,59 @@ public class AnomalyDetectionService {
     private final ObjectProvider<AnomalyDetector> detector;
     private final DetectionResultWriter writer;
     private final DetectionProperties properties;
-    private final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(1000), runnable -> {
-        var thread = new Thread(runnable, "anomaly-detector");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ThreadPoolExecutor executor;
 
+    @Autowired
     public AnomalyDetectionService(ObjectProvider<AnomalyDetector> detector, DetectionResultWriter writer,
                                    DetectionProperties properties) {
+        this(detector, writer, properties, 1000);
+    }
+
+    AnomalyDetectionService(ObjectProvider<AnomalyDetector> detector, DetectionResultWriter writer,
+                            DetectionProperties properties, int queueCapacity) {
         this.detector = detector;
         this.writer = writer;
         this.properties = properties;
+        this.executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(queueCapacity), runnable -> {
+            var thread = new Thread(runnable, "anomaly-detector");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
-    /** Agenda a avaliação e retorna na hora. */
-    public void process(ConsumptionSummaryDocument saved) {
+    /** Agenda a avaliação. Sob sobrecarga, aguarda vaga em vez de perder a janela inserida. */
+    public synchronized void process(ConsumptionSummaryDocument saved) {
         if (!properties.enabled()) return;
+        Runnable task = () -> processNow(saved);
         try {
-            executor.execute(() -> processNow(saved));
+            executor.execute(task);
         } catch (RejectedExecutionException exception) {
-            log.warn("Fila do detector cheia; janela {} do dispositivo {} não foi avaliada.",
-                    saved.getId(), saved.getDeviceId());
+            if (executor.isShutdown()) {
+                writeResult(saved, DetectionResult.notEvaluated("Detector em encerramento", Map.of()));
+                return;
+            }
+            // O monitor impede que novos produtores ultrapassem esta janela enquanto ela espera vaga.
+            // Uma interrupção do HTTP não pode descartar uma janela que já foi gravada no Mongo.
+            boolean interrupted = false;
+            try {
+                while (true) {
+                    try {
+                        executor.getQueue().put(task);
+                        break;
+                    } catch (InterruptedException interruptedException) {
+                        interrupted = true;
+                    }
+                }
+            } finally {
+                if (interrupted) Thread.currentThread().interrupt();
+            }
         }
+    }
+
+    @PreDestroy
+    public synchronized void close() {
+        executor.shutdown();
     }
 
     /** Avalia várias janelas em ordem cronológica (mais antiga primeiro). */
@@ -73,6 +105,10 @@ public class AnomalyDetectionService {
             result = DetectionResult.notEvaluated("Falha no detector: " + exception.getClass().getSimpleName(),
                     Map.of("config_version", properties.configVersion()));
         }
+        writeResult(saved, result);
+    }
+
+    private void writeResult(ConsumptionSummaryDocument saved, DetectionResult result) {
         try {
             writer.write(saved.getId(), result, DETECTOR_VERSION + "/" + properties.configVersion());
         } catch (RuntimeException exception) {
