@@ -28,7 +28,7 @@ public class UserJwtFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        return !(path.equals(PREFIX) || path.startsWith(PREFIX + "/"));
+        return !(path.equals(PREFIX) || path.startsWith(PREFIX + "/") || path.startsWith("/api/detection/"));
     }
 
     @Override

@@ -29,6 +29,13 @@ public class ConsumptionSummaryDocument {
     @Field("lpm_average")
     private Double lpmAverage;
 
+    @Field("user_id")
+    private Integer userId;
+    @Field("user_ids")
+    private List<Integer> userIds;
+    @Field("property_id")
+    private Integer propertyId;
+
     // Preenchidos depois da gravação pelo detector de anomalias; nulos até lá.
     @Field("anomaly_detected")
     private Boolean anomalyDetected;

@@ -48,6 +48,7 @@ class ConsumptionSummaryControllerTest {
     @MockitoBean private ConsumptionSummaryRepository repository;
     @MockitoBean private ConsumptionSummaryIndexes indexes;
     @MockitoBean private AnomalyDetectionService anomalyDetection;
+    @MockitoBean private br.com.delta.delta_api_mongo.modules.consumption.service.ConsumptionOwnershipService ownership;
 
     private static String payload() {
         return """

@@ -19,7 +19,7 @@ import java.time.Instant;
 @Tag(name = "Resumo de consumo", description = "Recebimento direto do hardware e consulta de consumo por janela")
 public interface ConsumptionSummarySwagger {
     @Operation(summary = "Registrar resumo de consumo",
-            description = "Valida o payload e grava o device_id informado, sem consultar cadastro ou situação na SQL. "
+            description = "Valida o payload e associa o dispositivo ao imóvel e usuários pelo cadastro SQL. "
                     + "Não exige token ou chave do hardware. "
                     + "A mesma janela do mesmo dispositivo não pode ser registrada duas vezes. Vazão média é opcional.")
     @ApiResponses({

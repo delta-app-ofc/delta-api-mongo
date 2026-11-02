@@ -1,0 +1,1 @@
+{"version":1,"seed":42,"window_minutes":5,"warmup_days":14,"evaluation_days":7,"scenarios":[{"name":"normal","leak_lpm":0,"label":"normal"},{"name":"persistent_small_leak","leak_lpm":0.1,"start_day":14,"label":"leak"}],"note":"Gerados por SyntheticHome em Java; não representam medições reais."}

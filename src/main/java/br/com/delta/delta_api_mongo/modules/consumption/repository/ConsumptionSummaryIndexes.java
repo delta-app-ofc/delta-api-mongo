@@ -20,10 +20,11 @@ public class ConsumptionSummaryIndexes {
     public synchronized void ensureCreated() {
         if (created) return;
         var indexes = mongo.indexOps(ConsumptionSummaryDocument.class);
-        indexes.createIndex(new Index().on("device_id", Sort.Direction.ASC)
+        var names = indexes.getIndexInfo().stream().map(info -> info.getName()).collect(java.util.stream.Collectors.toSet());
+        if (!names.contains("idx_consumption_summary_device_window_uq")) indexes.createIndex(new Index().on("device_id", Sort.Direction.ASC)
                 .on("window_started_at", Sort.Direction.ASC).on("window_finished_at", Sort.Direction.ASC)
                 .unique().named("idx_consumption_summary_device_window_uq"));
-        indexes.createIndex(new Index().on("device_id", Sort.Direction.ASC)
+        if (!names.contains("idx_consumption_summary_device_start")) indexes.createIndex(new Index().on("device_id", Sort.Direction.ASC)
                 .on("window_started_at", Sort.Direction.DESC).on("_id", Sort.Direction.DESC)
                 .named("idx_consumption_summary_device_start"));
         created = true;

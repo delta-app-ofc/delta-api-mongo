@@ -25,6 +25,11 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request.getRequestURI());
     }
 
+    @ExceptionHandler(br.com.delta.delta_api_mongo.common.exception.ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleUnavailable(RuntimeException exception, HttpServletRequest request) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request.getRequestURI());
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
             ResourceNotFoundException exception,

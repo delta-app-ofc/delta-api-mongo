@@ -41,13 +41,15 @@ class ConsumptionSummaryServiceTest {
     private ConsumptionSummaryIndexes indexes;
     private AnomalyDetectionService anomalyDetection;
     private ConsumptionSummaryService service;
+    private ConsumptionOwnershipService ownership;
 
     @BeforeEach
     void setUp() {
         repository = mock(ConsumptionSummaryRepository.class);
         indexes = mock(ConsumptionSummaryIndexes.class);
+        ownership = mock(ConsumptionOwnershipService.class);
         anomalyDetection = mock(AnomalyDetectionService.class);
-        service = new ConsumptionSummaryService(repository, new ConsumptionSummaryMapper(), indexes, anomalyDetection);
+        service = new ConsumptionSummaryService(repository, new ConsumptionSummaryMapper(), indexes, anomalyDetection, ownership);
     }
 
     @Test

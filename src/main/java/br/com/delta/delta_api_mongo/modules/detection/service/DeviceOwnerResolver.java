@@ -59,6 +59,16 @@ public class DeviceOwnerResolver {
         }
     }
 
+    /** Autorizacao de leitura/escrita exige cadastro atual, sem reutilizar vinculo em cache. */
+    public Optional<DeviceOwner> fresh(String deviceId) {
+        try {
+            return client.find(deviceId);
+        } catch (RuntimeException failure) {
+            throw new br.com.delta.delta_api_mongo.common.exception.ServiceUnavailableException(
+                    "Cadastro temporariamente indisponivel. Reenvie a requisicao.");
+        }
+    }
+
     private void cache(String deviceId, Optional<DeviceOwner> owner, Instant expiresAt) {
         if (cache.size() >= MAX_CACHE_ENTRIES && !cache.containsKey(deviceId)) {
             cache.remove(cache.keySet().iterator().next());

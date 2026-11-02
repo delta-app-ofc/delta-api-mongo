@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 
 public interface ConsumptionSummaryRepository extends MongoRepository<ConsumptionSummaryDocument, ObjectId> {
+    boolean existsByDeviceIdAndWindowStartedAtAndWindowFinishedAt(String deviceId, Instant windowStartedAt, Instant windowFinishedAt);
     @Query(value = "{'device_id': ?0, 'window_started_at': {'$gte': ?1, '$lt': ?2}}",
             sort = "{'window_started_at': -1, '_id': -1}")
     Page<ConsumptionSummaryDocument> findByDeviceIdAndWindowStartedAtGreaterThanEqualAndWindowStartedAtLessThanOrderByWindowStartedAtDescIdDesc(

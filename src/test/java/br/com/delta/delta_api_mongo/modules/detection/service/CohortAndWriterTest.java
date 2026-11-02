@@ -35,11 +35,11 @@ class CohortAndWriterTest {
     @Test
     void cohortReferenceIsTheMedianOfTheOtherDevicesWhenThereAreEnoughOfThem() {
         var repository = mock(UserHourBaselineRepository.class);
-        when(repository.findByHourOfWeekAndCountGreaterThanEqual(eq(10), anyInt(), any(Pageable.class)))
+        when(repository.findByCohortKeyAndHourOfWeekAndCountGreaterThanEqualAndDeviceIdNot(eq("RES|CASA|1"), eq(10), anyInt(), eq("DEV-NEW"), any(Pageable.class)))
                 .thenReturn(List.of(slot(2, 1), slot(4, 1), slot(6, 2), slot(8, 2), slot(100, 9)));
         var cohort = new CohortBaseline(repository, properties());
 
-        var reference = cohort.reference(10);
+        var reference = cohort.reference(10, "RES|CASA|1", "DEV-NEW");
 
         assertThat(reference).isPresent();
         assertThat(reference.get().median()).isEqualTo(6.0);
@@ -50,14 +50,14 @@ class CohortAndWriterTest {
     @Test
     void cohortIsUnavailableWithTooFewDevicesAndIsCachedPerHour() {
         var repository = mock(UserHourBaselineRepository.class);
-        when(repository.findByHourOfWeekAndCountGreaterThanEqual(eq(10), anyInt(), any(Pageable.class)))
+        when(repository.findByCohortKeyAndHourOfWeekAndCountGreaterThanEqualAndDeviceIdNot(eq("RES|CASA|1"), eq(10), anyInt(), eq("DEV-NEW"), any(Pageable.class)))
                 .thenReturn(List.of(slot(2, 1), slot(4, 1)));
         var cohort = new CohortBaseline(repository, properties());
 
-        assertThat(cohort.reference(10)).isEmpty();
-        assertThat(cohort.reference(10)).isEmpty();
+        assertThat(cohort.reference(10, "RES|CASA|1", "DEV-NEW")).isEmpty();
+        assertThat(cohort.reference(10, "RES|CASA|1", "DEV-NEW")).isEmpty();
 
-        verify(repository, times(1)).findByHourOfWeekAndCountGreaterThanEqual(eq(10), anyInt(), any(Pageable.class));
+        verify(repository, times(1)).findByCohortKeyAndHourOfWeekAndCountGreaterThanEqualAndDeviceIdNot(eq("RES|CASA|1"), eq(10), anyInt(), eq("DEV-NEW"), any(Pageable.class));
     }
 
     @Test
