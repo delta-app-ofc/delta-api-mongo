@@ -54,5 +54,25 @@ class BusinessScheduleTest {
     void isDefinedOnlyWithShifts() {
         assertThat(new BusinessSchedule(List.of(), Set.of()).isDefined()).isFalse();
         assertThat(new BusinessSchedule(null, Set.of()).isDefined()).isFalse();
+        assertThat(new BusinessSchedule(null, Set.of()).isOpen(Instant.now(), ZONE)).isFalse();
+    }
+
+    @Test
+    void anOvernightShiftBelongsToItsStartingDay() {
+        var schedule = new BusinessSchedule(List.of(new BusinessSchedule.Shift(LocalTime.of(22, 0),
+                LocalTime.of(6, 0))), Set.of(DayOfWeek.MONDAY));
+        assertThat(schedule.isOpen(Instant.parse("2026-07-14T01:00:00Z"), ZONE)).isTrue(); // segunda 22h
+        assertThat(schedule.isOpen(Instant.parse("2026-07-14T08:59:00Z"), ZONE)).isTrue(); // terça 05h59
+        assertThat(schedule.isOpen(Instant.parse("2026-07-14T09:00:00Z"), ZONE)).isFalse(); // fim exclusivo
+        assertThat(schedule.isOpen(Instant.parse("2026-07-13T08:00:00Z"), ZONE)).isFalse(); // madrugada de segunda
+        assertThat(schedule.isOpen(Instant.parse("2026-07-15T01:00:00Z"), ZONE)).isFalse(); // terça 22h
+    }
+
+    @Test
+    void aShiftEndingAtMidnightClosesExactlyAtTheDayBoundary() {
+        var schedule = new BusinessSchedule(List.of(new BusinessSchedule.Shift(LocalTime.of(22, 0),
+                LocalTime.MIDNIGHT)), Set.of(DayOfWeek.SUNDAY));
+        assertThat(schedule.isOpen(Instant.parse("2026-07-20T02:59:00Z"), ZONE)).isTrue();
+        assertThat(schedule.isOpen(Instant.parse("2026-07-20T03:00:00Z"), ZONE)).isFalse();
     }
 }

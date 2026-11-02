@@ -23,12 +23,21 @@ public record BusinessSchedule(List<Shift> shifts, Set<DayOfWeek> operationDays)
     }
 
     public boolean isOpen(Instant instant, ZoneId zone) {
+        if (!isDefined()) return false;
         ZonedDateTime local = instant.atZone(zone);
-        // Sem dias cadastrados, considera que funciona todos os dias.
-        if (operationDays != null && !operationDays.isEmpty() && !operationDays.contains(local.getDayOfWeek())) {
-            return false;
-        }
         LocalTime time = local.toLocalTime();
-        return shifts.stream().anyMatch(shift -> !time.isBefore(shift.start()) && time.isBefore(shift.end()));
+        return shifts.stream().anyMatch(shift -> {
+            if (shift.start().equals(shift.end())) return false;
+            if (shift.end().isAfter(shift.start())) {
+                return operatesOn(local.getDayOfWeek()) && !time.isBefore(shift.start()) && time.isBefore(shift.end());
+            }
+            // Depois da meia-noite, o turno pertence ao dia em que começou.
+            return (!time.isBefore(shift.start()) && operatesOn(local.getDayOfWeek()))
+                    || (time.isBefore(shift.end()) && operatesOn(local.getDayOfWeek().minus(1)));
+        });
+    }
+
+    private boolean operatesOn(DayOfWeek day) {
+        return operationDays == null || operationDays.isEmpty() || operationDays.contains(day);
     }
 }
