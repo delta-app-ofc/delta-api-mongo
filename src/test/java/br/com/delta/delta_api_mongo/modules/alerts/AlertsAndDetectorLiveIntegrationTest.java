@@ -176,8 +176,7 @@ class AlertsAndDetectorLiveIntegrationTest {
         ConsumptionSummaryDocument last = null;
         for (int i = 0; i < 7; i++) {
             Instant start = T0.plusSeconds(300L * i);
-            last = consumptionRepository.insert(new ConsumptionSummaryDocument(null, device, start,
-                    start.plusSeconds(300), 1.0, 0.2));
+            last = insertConsumption(device, start, false);
             detection.processNow(last);
         }
 
@@ -200,5 +199,38 @@ class AlertsAndDetectorLiveIntegrationTest {
         telemetry.remove(new Query(Criteria.where("device_id").is(device)), "consumption_summary");
         app.remove(new Query(Criteria.where("device_id").is(device)), "user_hour_baseline");
         assertThat(new ObjectId(last.getId().toHexString())).isNotNull();
+    }
+
+    @Test
+    void theWorkerDiscoversPersistedPendingWindowsWithoutANewPost() throws Exception {
+        String device = DEVICE + "_pending";
+        var pending = insertConsumption(device, T0, true);
+        try {
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+            ConsumptionSummaryDocument stored;
+            do {
+                stored = consumptionRepository.findById(pending.getId()).orElseThrow();
+                if ("completed".equals(stored.getDetectionStatus())) break;
+                Thread.sleep(50);
+            } while (System.nanoTime() < deadline);
+            assertThat(stored.getDetectionStatus()).isEqualTo("completed");
+            assertThat(stored.getAnomalyDetected()).isNotNull();
+            assertThat(baselineRepository.findByDeviceIdAndHourOfWeek(device, -1)).isPresent();
+        } finally {
+            telemetry.remove(new Query(Criteria.where("device_id").is(device)), "consumption_summary");
+            app.remove(new Query(Criteria.where("device_id").is(device)), "user_hour_baseline");
+        }
+    }
+
+    // O schema atual exige user_id. O fixture inclui o campo, sem alterar o contrato do POST do hardware.
+    private ConsumptionSummaryDocument insertConsumption(String device, Instant start, boolean pending) {
+        var id = new ObjectId();
+        var raw = new org.bson.Document("_id", id).append("device_id", device).append("user_id", USER)
+                .append("window_started_at", java.util.Date.from(start))
+                .append("window_finished_at", java.util.Date.from(start.plusSeconds(300)))
+                .append("consumption_liters", 1.0).append("lpm_average", 0.2);
+        if (pending) raw.append("detection_status", "pending");
+        telemetry.insert(raw, "consumption_summary");
+        return consumptionRepository.findById(id).orElseThrow();
     }
 }
