@@ -225,8 +225,14 @@ public class AnomalyDetector {
             acc.clear();
         }
         if (baselines.hasSlowHistory(slot)) {
-            double mean = slot.getSamples().stream().mapToDouble(Double::doubleValue).average().orElse(0);
-            double variance = slot.getSamples().stream().mapToDouble(v -> Math.pow(v - mean, 2)).average().orElse(0);
+            double sampleMean = slot.getSamples().stream().mapToDouble(Double::doubleValue).average().orElse(0);
+            double mean = sampleMean;
+            double variance = slot.getSamples().stream().mapToDouble(v -> Math.pow(v - sampleMean, 2)).average().orElse(0);
+            // A promoção consolida média e dispersão; uma amostra-resumo não representa variância zero.
+            if (slot.isSlowReady()) {
+                mean = slot.getMedian();
+                variance = Math.pow((slot.getMad() == null ? 0 : slot.getMad()) * RobustStats.MAD_TO_SIGMA, 2);
+            }
             double sigma = Math.max(Math.sqrt(variance), properties.regime().minSigmaLiters());
             acc.merge("liters", window.liters(), Double::sum);
             acc.merge("expected", mean, Double::sum);

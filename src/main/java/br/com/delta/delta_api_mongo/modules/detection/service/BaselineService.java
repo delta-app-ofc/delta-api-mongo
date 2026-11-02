@@ -57,6 +57,7 @@ public class BaselineService {
         slot.setMedian(median);
         slot.setMad(RobustStats.mad(samples, median));
         slot.setCount(slot.getCount() + 1);
+        if (samples.size() >= properties.baseline().minSamples()) slot.setSlowReady(false);
     }
 
     /** Atualiza o baseline rápido (média e variância móveis exponenciais). */
@@ -86,7 +87,8 @@ public class BaselineService {
     }
 
     public boolean hasSlowHistory(UserHourBaselineDocument slot) {
-        return slot.getSamples().size() >= properties.baseline().minSamples() && slot.getMedian() != null;
+        return (slot.isSlowReady() || slot.getSamples().size() >= properties.baseline().minSamples())
+                && slot.getMedian() != null;
     }
 
     /**
@@ -109,5 +111,6 @@ public class BaselineService {
         slot.setSamples(new ArrayList<>(List.of(mean)));
         slot.setMedian(mean);
         slot.setMad(sigma / RobustStats.MAD_TO_SIGMA);
+        slot.setSlowReady(true);
     }
 }
