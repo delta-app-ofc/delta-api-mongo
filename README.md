@@ -5,7 +5,7 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-Spring%20Data-47A248?logo=mongodb&logoColor=white)
 ![OpenAPI](https://img.shields.io/badge/springdoc-3.1.1-6BA539?logo=swagger&logoColor=white)
 
-Do resumo enviado pelo hardware à consulta pela aplicação, esta API registra a telemetria consolidada do Delta e mantém o estado mais recente de cada dispositivo. É um serviço Spring Boot voltado ao banco MongoDB de telemetria; não recebe pulsos brutos nem substitui a API relacional.
+A API de telemetria MongoDB registra os resumos de consumo enviados pelo hardware e mantém o estado mais recente de cada dispositivo. Construída com Spring Boot, ela oferece endpoints para gravar e consultar esses dados.
 
 **Tags:** `delta` · `api-rest` · `spring-boot` · `java-17` · `mongodb` · `telemetria-iot` · `openapi`
 
@@ -29,7 +29,7 @@ Do resumo enviado pelo hardware à consulta pela aplicação, esta API registra 
 | Persistência | Usar Spring Data MongoDB no banco `db_delta_telemetry`. |
 | Operação | Expor health check, documentação OpenAPI e tratamento consistente de erros. |
 
-O serviço escreve apenas na base de telemetria indicada em `MONGODB_TELEMETRY_URI`. Preferências, alertas, clima e sessões de chat pertencem a outros componentes e não são gerenciados por esta API.
+A base usada pelo serviço é definida em `MONGODB_TELEMETRY_DATABASE` e a conexão em `MONGODB_TELEMETRY_URI`.
 
 ## Fluxo da telemetria
 
@@ -38,7 +38,7 @@ O serviço escreve apenas na base de telemetria indicada em `MONGODB_TELEMETRY_U
 3. O mapper e o repositório convertem e persistem o documento no MongoDB.
 4. Consultas recuperam os resumos por identificador, dispositivo ou intervalo; atualizações de status sobrescrevem o estado atual daquele dispositivo.
 
-Os índices definidos nos repositórios apoiam as consultas dos módulos. A implementação não consulta o cadastro PostgreSQL para confirmar a propriedade do dispositivo; a autenticação e autorização de origem devem ser definidas pelo serviço que integra o hardware ao Delta.
+Os repositórios definem índices para as consultas dos módulos. O cadastro relacional dos dispositivos fica no PostgreSQL e é mantido pela API correspondente.
 
 ## Recursos HTTP
 
@@ -59,7 +59,7 @@ Requisitos: Java 17, o Maven Wrapper incluído neste repositório e acesso a uma
 
 ### 1. Preparar o ambiente
 
-Copie o modelo e configure a URI para uma instância local ou para o ambiente autorizado. Não versione connection strings ou credenciais.
+Copie o modelo e configure a conexão com a instância MongoDB do ambiente. Mantenha a URI e as credenciais no `.env` local.
 
 ~~~bash
 cp .env.example .env
@@ -97,7 +97,7 @@ Os testes live que dependem de uma instância MongoDB são opt-in. Consulte [TES
 docker build --no-cache --target test -t delta-api-mongo:test .
 ~~~
 
-O estágio de execução pode ser empacotado separadamente; esse build de imagem não substitui a execução de testes:
+Para empacotar a imagem de execução:
 
 ~~~bash
 docker build -t delta-api-mongo:local .
