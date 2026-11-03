@@ -1,5 +1,6 @@
 package br.com.delta.delta_api_mongo.modules.alerts;
 
+import br.com.delta.delta_api_mongo.modules.alerts.dto.request.CreateAlertRequest;
 import br.com.delta.delta_api_mongo.modules.alerts.service.AlertsService;
 import br.com.delta.delta_api_mongo.modules.consumption.document.ConsumptionSummaryDocument;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryRepository;
@@ -41,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "delta.mongodb.telemetry.database=db_delta_telemetry",
         "delta.mongodb.app.uri=${delta.test.live-mongo-uri:mongodb://127.0.0.1:27019}",
         "delta.mongodb.app.database=db_delta_app",
-        "delta.detection.enabled=true", "delta.alerts.enabled=true"})
+        "delta.detection.enabled=true", "delta.alerts.enabled=true", "delta.alerts.service-key=live-test-key"})
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AlertsAndDetectorLiveIntegrationTest {
     private static final int USER = 900_000 + Math.floorMod(UUID.randomUUID().hashCode(), 90_000);
@@ -67,27 +68,27 @@ class AlertsAndDetectorLiveIntegrationTest {
         telemetry.remove(new Query(Criteria.where("device_id").is(DEVICE)), "consumption_summary");
     }
 
-    private AlertHistoryDocument seed(String type, String severity, String key, Integer user) {
-        var alert = new AlertHistoryDocument();
-        alert.setUserId(user);
-        alert.setPropertyId(1);
-        alert.setAlertType(type);
-        alert.setSeverity(severity);
-        alert.setTitle("Título " + type);
-        alert.setMessage("Mensagem");
-        alert.setSource("system");
-        alert.setDedupKey(key);
-        alert.setEvidence(Map.of("projected_percent", 108));
-        alert.setTriggeredAt(Instant.now());
-        return alertRepository.insert(alert);
+    private CreateAlertRequest request(String type, String severity, String key, Integer user) {
+        return new CreateAlertRequest(user, type, severity, "Título " + type, "Mensagem", "gluh", key, 1, null,
+                Map.of("projected_percent", 108), null);
     }
 
     @Test
-    void listAndDismissAgainstARealMongo() {
-        var created = seed("previsao_ultrapassagem_meta", "medium", "system:" + USER + ":previsao:2030-03", USER);
-        seed("limite_ultrapassado", "high", "system:" + USER + ":limite:2030-03", USER);
-        seed("dica_personalizada", "low", "system:" + USER + ":dica:2030-03-04", USER);
-        seed("dica_personalizada", "low", "system:" + OTHER_USER + ":dica:2030-03-04", OTHER_USER);
+    void createListDismissAndResolveAgainstARealMongo() {
+        String key = "gluh:" + USER + ":previsao_ultrapassagem_meta:2030-03";
+        var created = alerts.create(request("previsao_ultrapassagem_meta", "medium", key, USER));
+        assertThat(created.created()).isTrue();
+
+        // a segunda chamada com a mesma chave devolve o mesmo alerta, sem duplicar
+        var again = alerts.create(request("previsao_ultrapassagem_meta", "medium", key, USER));
+        assertThat(again.created()).isFalse();
+        assertThat(again.alert().id()).isEqualTo(created.alert().id());
+        assertThat(alertRepository.findByDedupKeyAndResolvedAtIsNull(key)).hasSize(1);
+
+        alerts.create(request("limite_ultrapassado", "high", "gluh:" + USER + ":limite_ultrapassado:2030-03", USER));
+        alerts.create(request("dica_personalizada", "low", "gluh:" + USER + ":dica_personalizada:2030-03-04", USER));
+        alerts.create(request("dica_personalizada", "low", "gluh:" + OTHER_USER + ":dica_personalizada:2030-03-04",
+                OTHER_USER));
 
         // listagem: só do usuário, mais novo primeiro, filtro de severidade e dispensados
         var all = alerts.list(USER, null, false, PageRequest.of(0, 20));
@@ -98,12 +99,16 @@ class AlertsAndDetectorLiveIntegrationTest {
         assertThat(all.getContent().get(0).triggeredAt()).isAfterOrEqualTo(all.getContent().get(2).triggeredAt());
 
         // dispensar: some da lista padrão, aparece com include_dismissed, e outro usuário não consegue dispensar
-        var dismissed = alerts.dismiss(USER, created.getId().toHexString());
+        var dismissed = alerts.dismiss(USER, created.alert().id());
         assertThat(dismissed.dismissedAt()).isNotNull();
         assertThat(alerts.list(USER, null, false, PageRequest.of(0, 20)).getContent()).hasSize(2);
         assertThat(alerts.list(USER, null, true, PageRequest.of(0, 20)).getContent()).hasSize(3);
-        assertThatThrownBy(() -> alerts.dismiss(OTHER_USER, created.getId().toHexString())).hasMessageContaining("não encontrado");
+        assertThatThrownBy(() -> alerts.dismiss(OTHER_USER, created.alert().id())).hasMessageContaining("não encontrado");
 
+        // encerrar e reabrir com a mesma chave
+        assertThat(alerts.resolve(key).resolved()).isEqualTo(1);
+        assertThat(alerts.resolve(key).resolved()).isZero();
+        assertThat(alerts.create(request("previsao_ultrapassagem_meta", "medium", key, USER)).created()).isTrue();
     }
 
     @Test

@@ -15,8 +15,12 @@ class AlertsFiltersTest {
     private static final Clock CLOCK = Clock.fixed(Instant.ofEpochMilli(NOW_MS), ZoneOffset.UTC);
 
     private static UserJwtFilter userFilter() {
-        return new UserJwtFilter(new JwtVerifier(new AlertsProperties(true,
+        return new UserJwtFilter(new JwtVerifier(new AlertsProperties(true, "",
                 new AlertsProperties.Auth(PUBLIC_PEM, "delta-api", "delta-api", 30)), CLOCK));
+    }
+
+    private static ServiceKeyFilter keyFilter(String key) {
+        return new ServiceKeyFilter(new AlertsProperties(true, key, new AlertsProperties.Auth("", "a", "a", 30)));
     }
 
     private static MockHttpServletResponse run(jakarta.servlet.Filter filter, MockHttpServletRequest request,
@@ -82,5 +86,40 @@ class AlertsFiltersTest {
         run(userFilter(), request, calls);
 
         assertThat(request.getAttribute(UserJwtFilter.USER_ID)).isEqualTo(5);
+    }
+
+    @Test
+    void theServiceKeyFilterAcceptsOnlyTheConfiguredKey() throws Exception {
+        var calls = new AtomicInteger();
+
+        var ok = run(keyFilter("segredo"), get("/api/internal/alerts", "X-Service-Key", "segredo"), calls);
+        var wrong = run(keyFilter("segredo"), get("/api/internal/alerts/resolve", "X-Service-Key", "errado"), calls);
+        var missing = run(keyFilter("segredo"), get("/api/internal/alerts", "X", null), calls);
+
+        assertThat(ok.getStatus()).isEqualTo(200);
+        assertThat(wrong.getStatus()).isEqualTo(401);
+        assertThat(missing.getStatus()).isEqualTo(401);
+        assertThat(wrong.getContentAsString()).contains("Chave de serviço");
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void withoutAConfiguredKeyTheInternalRoutesStayClosed() throws Exception {
+        var calls = new AtomicInteger();
+
+        assertThat(run(keyFilter(""), get("/api/internal/alerts", "X-Service-Key", ""), calls).getStatus()).isEqualTo(401);
+        assertThat(run(keyFilter(""), get("/api/internal/alerts", "X-Service-Key", "qualquer"), calls).getStatus())
+                .isEqualTo(401);
+        assertThat(calls).hasValue(0);
+    }
+
+    @Test
+    void theServiceKeyFilterIgnoresUserRoutesAndAUserTokenDoesNotOpenInternalOnes() throws Exception {
+        var calls = new AtomicInteger();
+
+        assertThat(run(keyFilter("segredo"), get("/api/alerts", "X", null), calls).getStatus()).isEqualTo(200);
+        var userToken = run(keyFilter("segredo"), get("/api/internal/alerts", "Authorization", "Bearer " + token("1")),
+                calls);
+        assertThat(userToken.getStatus()).isEqualTo(401);
     }
 }

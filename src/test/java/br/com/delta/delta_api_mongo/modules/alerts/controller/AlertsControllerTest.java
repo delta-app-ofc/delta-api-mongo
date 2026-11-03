@@ -5,7 +5,9 @@ import br.com.delta.delta_api_mongo.modules.alerts.TestKeys;
 import br.com.delta.delta_api_mongo.modules.alerts.config.AlertsConfig;
 import br.com.delta.delta_api_mongo.modules.alerts.dto.response.AlertResponse;
 import br.com.delta.delta_api_mongo.modules.alerts.dto.response.LeakSummaryResponse;
+import br.com.delta.delta_api_mongo.modules.alerts.dto.response.ResolveAlertResponse;
 import br.com.delta.delta_api_mongo.modules.alerts.security.JwtVerifier;
+import br.com.delta.delta_api_mongo.modules.alerts.security.ServiceKeyFilter;
 import br.com.delta.delta_api_mongo.modules.alerts.security.UserJwtFilter;
 import br.com.delta.delta_api_mongo.modules.alerts.service.AlertsService;
 import org.junit.jupiter.api.Test;
@@ -34,8 +36,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = AlertsController.class, properties = "delta.alerts.enabled=true")
-@Import({AlertsConfig.class, JwtVerifier.class, UserJwtFilter.class})
+@WebMvcTest(controllers = {AlertsController.class, InternalAlertsController.class}, properties = {
+        "delta.alerts.enabled=true", "delta.alerts.service-key=segredo-de-teste"})
+@Import({AlertsConfig.class, JwtVerifier.class, UserJwtFilter.class, ServiceKeyFilter.class})
 class AlertsControllerTest {
     private static final String ID = "6ab94eaad79d853341d2605c";
     private static final Instant T = Instant.parse("2026-11-02T12:00:00Z");
@@ -57,6 +60,12 @@ class AlertsControllerTest {
     private static String bearer() throws Exception {
         return "Bearer " + TestKeys.liveToken("212");
     }
+
+    private static final String BODY = """
+            {"user_id":212,"alert_type":"previsao_ultrapassagem_meta","severity":"medium",
+             "title":"Previsão de ultrapassagem de meta","message":"Ritmo projeta 108% da meta",
+             "source":"gluh","dedup_key":"gluh:212:previsao_ultrapassagem_meta:2026-11","property_id":1,
+             "evidence":{"projected_percent":108}}""";
 
     // ---------------- rotas do usuário ----------------
 
@@ -140,5 +149,62 @@ class AlertsControllerTest {
                 .andExpect(jsonPath("points").value(2))
                 .andExpect(jsonPath("window_hours").value(24))
                 .andExpect(jsonPath("cost").doesNotExist());
+    }
+
+    // ---------------- rotas internas ----------------
+
+    @Test
+    void internalRoutesNeedTheServiceKeyAndIgnoreUserTokens() throws Exception {
+        mvc.perform(post("/api/internal/alerts").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "errada")
+                .contentType(MediaType.APPLICATION_JSON).content(BODY)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/internal/alerts").header("Authorization", bearer())
+                .contentType(MediaType.APPLICATION_JSON).content(BODY)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void createReturns201WhenCreatedAnd200WhenItAlreadyExisted() throws Exception {
+        when(service.create(any())).thenReturn(new AlertsService.CreateResult(response(), true))
+                .thenReturn(new AlertsService.CreateResult(response(), false));
+
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isCreated()).andExpect(jsonPath("_id").value(ID));
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content(BODY)).andExpect(status().isOk());
+    }
+
+    @Test
+    void createValidatesTheBodyBeforeCallingTheService() throws Exception {
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"sem campos obrigatórios\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"user_id\":212", "\"user_id\":-3")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void aBusinessRuleViolationFromTheServiceBecomesA400() throws Exception {
+        when(service.create(any())).thenThrow(new IllegalArgumentException("severity high só é permitido para limite_ultrapassado"));
+
+        mvc.perform(post("/api/internal/alerts").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content(BODY.replace("medium", "high")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("message").value(org.hamcrest.Matchers.containsString("limite_ultrapassado")));
+    }
+
+    @Test
+    void resolveClosesByDedupKey() throws Exception {
+        when(service.resolve("gluh:212:previsao_ultrapassagem_meta:2026-11")).thenReturn(new ResolveAlertResponse(1));
+
+        mvc.perform(post("/api/internal/alerts/resolve").header("X-Service-Key", "segredo-de-teste")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dedup_key\":\"gluh:212:previsao_ultrapassagem_meta:2026-11\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("resolved").value(1));
+        mvc.perform(post("/api/internal/alerts/resolve").header("X-Service-Key", "segredo-de-teste")
+                .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isBadRequest());
     }
 }

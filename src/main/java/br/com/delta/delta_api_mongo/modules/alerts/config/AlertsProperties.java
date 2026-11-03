@@ -5,11 +5,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * API de alertas (prefixo delta.alerts). Desligada por padrão.
+ * - serviceKey: chave do cabeçalho X-Service-Key das rotas internas (escrita da IA); vazia = rotas fechadas.
  * - auth: dados para validar o JWT RS256 que o back-end emite para o usuário (mesma chave pública da IA).
  */
 @ConfigurationProperties(prefix = "delta.alerts")
 public record AlertsProperties(
         @DefaultValue("false") boolean enabled,
+        @DefaultValue("") String serviceKey,
         @DefaultValue Auth auth
 ) {
     /** publicKey: PEM X.509 inline ou caminho de arquivo (com ou sem file:). */
