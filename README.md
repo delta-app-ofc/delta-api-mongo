@@ -13,7 +13,7 @@ Use [.env.example](.env.example) como referência de configuração. Antes de ha
 | `DELTA_DETECTION_ENABLED` | Habilita a avaliação após inserir uma janela de consumo |
 | `DELTA_DETECTION_CONFIG_VERSION` | Versão dos parâmetros registrada na detecção |
 | `DELTA_DETECTION_OWNER_URL` | URL base da API Postgres, sem o caminho `/delta/internal/device/{id}/owner` |
-| `DELTA_DETECTION_OWNER_SERVICE_KEY` | Mesma `AUTH_SERVICE_KEY` da API Postgres |
+| `AUTH_SERVICE_KEY` | Chave de serviço da API Postgres (mesmo valor e mesmo nome nos dois serviços) |
 | `MONGODB_APP_URI`, `MONGODB_APP_DATABASE` | Conexão do baseline e de `alerts_history` |
 | `DELTA_ALERTS_ENABLED` | Habilita as rotas de alertas |
 | `AUTH_PUBLIC_KEY` | Chave pública RSA do back-end, em PEM ou caminho de arquivo |
