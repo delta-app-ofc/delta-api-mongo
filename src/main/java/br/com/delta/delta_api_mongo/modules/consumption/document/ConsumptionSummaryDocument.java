@@ -36,20 +36,6 @@ public class ConsumptionSummaryDocument {
     @Field("property_id")
     private Integer propertyId;
 
-    // Preenchidos depois da gravação pelo detector de anomalias; nulos até lá.
-    @Field("anomaly_detected")
-    private Boolean anomalyDetected;
-    @Field("anomaly_reasons")
-    private List<String> anomalyReasons;
-    @Field("anomaly_evidence")
-    private Map<String, Object> anomalyEvidence;
-    @Field("detection_error")
-    private String detectionError;
-    @Field("detector_version")
-    private String detectorVersion;
-    @Field("detection_status")
-    private String detectionStatus;
-
     public ConsumptionSummaryDocument(ObjectId id, String deviceId, Instant windowStartedAt,
                                       Instant windowFinishedAt, Double consumptionLiters, Double lpmAverage) {
         this.id = id;

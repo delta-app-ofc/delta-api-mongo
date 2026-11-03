@@ -7,7 +7,6 @@ import br.com.delta.delta_api_mongo.modules.consumption.dto.request.ConsumptionS
 import br.com.delta.delta_api_mongo.modules.consumption.mapper.ConsumptionSummaryMapper;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryIndexes;
 import br.com.delta.delta_api_mongo.modules.consumption.repository.ConsumptionSummaryRepository;
-import br.com.delta.delta_api_mongo.modules.detection.service.AnomalyDetectionService;
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
@@ -39,17 +36,13 @@ class ConsumptionSummaryServiceTest {
 
     private ConsumptionSummaryRepository repository;
     private ConsumptionSummaryIndexes indexes;
-    private AnomalyDetectionService anomalyDetection;
     private ConsumptionSummaryService service;
-    private ConsumptionOwnershipService ownership;
 
     @BeforeEach
     void setUp() {
         repository = mock(ConsumptionSummaryRepository.class);
         indexes = mock(ConsumptionSummaryIndexes.class);
-        ownership = mock(ConsumptionOwnershipService.class);
-        anomalyDetection = mock(AnomalyDetectionService.class);
-        service = new ConsumptionSummaryService(repository, new ConsumptionSummaryMapper(), indexes, anomalyDetection, ownership);
+        service = new ConsumptionSummaryService(repository, new ConsumptionSummaryMapper(), indexes);
     }
 
     @Test
@@ -94,31 +87,6 @@ class ConsumptionSummaryServiceTest {
         assertThatThrownBy(() -> service.create(request(12.5, null)))
                 .isInstanceOf(ResourceAlreadyExistsException.class)
                 .hasMessageContaining("Já existe");
-        verify(anomalyDetection).prepare(any(ConsumptionSummaryDocument.class));
-        verify(anomalyDetection, never()).process(any());
-    }
-
-    @Test
-    void createRunsTheDetectorOnlyAfterTheWindowIsSaved() {
-        var inserted = document();
-        when(repository.insert(any(ConsumptionSummaryDocument.class))).thenReturn(inserted);
-
-        service.create(request(12.5, 2.5));
-
-        var order = inOrder(repository, anomalyDetection);
-        order.verify(repository).insert(any(ConsumptionSummaryDocument.class));
-        order.verify(anomalyDetection).process(inserted);
-    }
-
-    @Test
-    void createStillReturnsTheSummaryWhenTheDetectorFails() {
-        var inserted = document();
-        when(repository.insert(any(ConsumptionSummaryDocument.class))).thenReturn(inserted);
-        doThrow(new IllegalStateException("detector indisponivel")).when(anomalyDetection).process(inserted);
-
-        var result = service.create(request(12.5, 2.5));
-
-        assertThat(result.id()).isEqualTo(inserted.getId().toHexString());
     }
 
     @Test
