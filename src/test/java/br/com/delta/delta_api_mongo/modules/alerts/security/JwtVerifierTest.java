@@ -16,7 +16,7 @@ class JwtVerifierTest {
     private static final Clock CLOCK = Clock.fixed(Instant.ofEpochMilli(NOW_MS), ZoneOffset.UTC);
 
     private static JwtVerifier verifier(String publicKey) {
-        return new JwtVerifier(new AlertsProperties(true, "",
+        return new JwtVerifier(new AlertsProperties(true,
                 new AlertsProperties.Auth(publicKey, "delta-api", "delta-api", 30)), CLOCK);
     }
 
