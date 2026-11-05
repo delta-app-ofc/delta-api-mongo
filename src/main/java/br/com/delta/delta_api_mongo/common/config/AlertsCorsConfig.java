@@ -14,7 +14,7 @@ import java.util.List;
 @Configuration(proxyBeanMethods = false)
 public class AlertsCorsConfig {
     @Bean
-    FilterRegistrationBean<CorsFilter> alertsCors(@Value("${delta.web.allowed-origins:http://localhost:5173}") String allowed) {
+    FilterRegistrationBean<CorsFilter> alertsCors(@Value("${delta.web.allowed-origins:http://localhost:5173,https://delta-web-app.onrender.com}") String allowed) {
         var origins = Arrays.stream(allowed.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
         if (origins.contains("*")) throw new IllegalArgumentException("Configure origens explícitas para a web.");
         var config = new CorsConfiguration();
